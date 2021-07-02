@@ -27,6 +27,7 @@ def get_gro_mask(mask_shape):
 
 def test_zero_filled(data_dir, out_dir):
     reconstructions = {}
+    mask = get_gro_mask()
 
     for fname in tqdm(list(data_dir.glob("*.h5"))):
         with h5py.File(fname, "r") as hf:
@@ -41,7 +42,7 @@ def test_zero_filled(data_dir, out_dir):
             )
 
             # inverse Fourier Transform to get zero filled solution
-            masked_kspace = kspace * get_gro_mask(kspace.shape) + 0.0
+            masked_kspace = kspace * mask + 0.0
             slice_image = fastmri.ifft2c(masked_kspace)
 
             # check for FLAIR 203
