@@ -13,7 +13,7 @@ from argparse import ArgumentParser
 from collections import defaultdict
 
 import bart
-from utils import fastmri
+from utils.fastmri import save_reconstructions
 import numpy as np
 import torch
 import yaml
@@ -151,7 +151,7 @@ def save_outputs(outputs, output_path):
         for fname, slice_preds in reconstructions.items()
     }
 
-    fastmri.save_reconstructions(reconstructions, output_path)
+    save_reconstructions(reconstructions, output_path)
 
 
 def run_model(idx):
