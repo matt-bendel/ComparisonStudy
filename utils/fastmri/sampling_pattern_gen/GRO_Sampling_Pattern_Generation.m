@@ -5,7 +5,7 @@
 clc; clear all; close all;
 
 %% setting for 360x360 image
-dimension = 360;
+dimension = 320;
 R = 4;
 frames = 1;
 mid_sampling_band = 32; % 32 lines in the middle will be fully sampled
