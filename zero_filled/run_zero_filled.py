@@ -6,9 +6,10 @@ LICENSE file in the root directory of this source tree.
 
 import xml.etree.ElementTree as etree
 import numpy as np
+from pathlib import Path
 
 from utils import fastmri
-from utils.fastmri import generate_gro_mask
+from utils.fastmri.utils import generate_gro_mask
 import h5py
 from utils.fastmri.data import transforms
 from utils.fastmri.data.mri_data import et_query
@@ -17,7 +18,7 @@ import torch
 
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
-    mask = generate_gro_mask()
+    mask = generate_gro_mask(mask_shape[2])
     shape = np.array(mask_shape)
     shape[:-3] = 1
     num_cols = shape[-2]
@@ -27,13 +28,11 @@ def get_gro_mask(mask_shape):
 
 def test_zero_filled(data_dir, out_dir):
     reconstructions = {}
-    mask = get_gro_mask()
 
     for fname in tqdm(list(data_dir.glob("*.h5"))):
         with h5py.File(fname, "r") as hf:
             et_root = etree.fromstring(hf["ismrmrd_header"][()])
-            kspace = hf['kspace'][()]
-
+            kspace = transforms.to_tensor(hf['kspace'][()][0])
             # extract target image width, height from ismrmrd header
             enc = ["encoding", "encodedSpace", "matrixSize"]
             crop_size = (
@@ -42,7 +41,7 @@ def test_zero_filled(data_dir, out_dir):
             )
 
             # inverse Fourier Transform to get zero filled solution
-            masked_kspace = kspace * mask + 0.0
+            masked_kspace = kspace * get_gro_mask(kspace.shape) + 0.0
             slice_image = fastmri.ifft2c(masked_kspace)
 
             # check for FLAIR 203
@@ -62,5 +61,7 @@ def test_zero_filled(data_dir, out_dir):
 
     fastmri.save_reconstructions(reconstructions, out_dir)
 
-data = '../multicoil_test'
+data = Path('/storage/fastMRI_brain/data/multicoil_test')
 out = 'zero_fill_out'
+
+test_zero_filled(data, out)

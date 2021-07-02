@@ -13,8 +13,8 @@ import h5py
 import numpy as np
 import os
 
-def generate_gro_mask(accel=4):
-    return genfromtxt(os.path.dirname(os.path.abspath(__file__)) + '/gro_r4_mask.csv', delimiter=',')
+def generate_gro_mask(shape):
+    return genfromtxt(os.path.dirname(os.path.abspath(__file__)) + f'/gro_r4_mask_{shape}.csv', delimiter=',')
 
 
 def save_reconstructions(reconstructions: Dict[str, np.ndarray], out_dir: Path):
