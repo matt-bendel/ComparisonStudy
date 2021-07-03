@@ -1,22 +1,17 @@
-"""
-Copyright (c) Facebook, Inc. and its affiliates.
-
-This source code is licensed under the MIT license found in the
-LICENSE file in the root directory of this source tree.
-"""
-
 import argparse
 import pathlib
 from argparse import ArgumentParser
 from typing import Optional
+import xml.etree.ElementTree as etree
+from utils.fastmri.data.mri_data import et_query
 
 import h5py
 import numpy as np
 from runstats import Statistics
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
-
+from utils import fastmri
 from utils.fastmri.data import transforms
-
+import matplotlib.pyplot as plt
 
 def mse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     """Compute Mean Squared Error (MSE)"""
@@ -97,26 +92,54 @@ class Metrics:
             for name in metric_names
         )
 
+def recover_target(target):
+	et_root = etree.fromstring(target["ismrmrd_header"][()])
+	kspace = transforms.to_tensor(target['kspace'][()])
+	# extract target image width, height from ismrmrd header
+	enc = ["encoding", "encodedSpace", "matrixSize"]
+	crop_size = (
+		int(et_query(et_root, enc + ["x"])),
+		int(et_query(et_root, enc + ["y"])),
+	)
+
+	# inverse Fourier Transform to get zero filled solution
+	slice_image = fastmri.ifft2c(kspace)
+
+	# check for FLAIR 203
+	if slice_image.shape[-2] < crop_size[1]:
+		crop_size = (slice_image.shape[-2], slice_image.shape[-2])
+
+	# crop input image
+	image = transforms.complex_center_crop(slice_image, crop_size)
+
+	# absolute value
+	image = fastmri.complex_abs(image)
+
+	return fastmri.rss(image, dim=1).numpy()
+
 
 def evaluate(args, recons_key):
     metrics = Metrics(METRIC_FUNCS)
-
     for tgt_file in args.target_path.iterdir():
-        with h5py.File(tgt_file, "r") as target, h5py.File(
-            args.predictions_path / tgt_file.name, "r"
-        ) as recons:
-            if 320 != transforms.to_tensor(target['kspace'][()][0]).shape[2]:
-                continue
+        try:
+            with h5py.File(tgt_file, "r") as target, h5py.File(
+                args.predictions_path / tgt_file.name, "r"
+            ) as recons:
+                if 320 != transforms.to_tensor(target['kspace'][()]).shape[3]:
+                    continue
 
-            target = target[recons_key][()]
-            recons = recons["reconstruction"][()]
-            target = transforms.center_crop(
-                target, (target.shape[-1], target.shape[-1])
-            )
-            recons = transforms.center_crop(
-                recons, (target.shape[-1], target.shape[-1])
-            )
-            metrics.push(target, recons)
+                target = recover_target(target)
+                recons = recons["reconstruction"][()]
+                target = transforms.center_crop(
+                    target, (320, 320)
+                )
+                recons = transforms.center_crop(
+                    recons, (320, 320)
+                )
+
+                metrics.push(target, recons)
+        except:
+            pass
 
     return metrics
 
@@ -160,7 +183,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     recons_key = (
-        "reconstruction_rss" if args.challenge == "multicoil" else "reconstruction_esc"
+        "kspace" if args.challenge == "multicoil" else "reconstruction_esc"
     )
     metrics = evaluate(args, recons_key)
     print(metrics)

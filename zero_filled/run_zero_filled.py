@@ -18,7 +18,7 @@ import torch
 
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
-    mask = generate_gro_mask(mask_shape[2])
+    mask = generate_gro_mask(mask_shape[3])
     shape = np.array(mask_shape)
     shape[:-3] = 1
     num_cols = shape[-2]
@@ -32,36 +32,37 @@ def test_zero_filled(data_dir, out_dir):
     for fname in tqdm(list(data_dir.glob("*.h5"))):
         with h5py.File(fname, "r") as hf:
             et_root = etree.fromstring(hf["ismrmrd_header"][()])
-            kspace = transforms.to_tensor(hf['kspace'][()][0])
-            # extract target image width, height from ismrmrd header
-            enc = ["encoding", "encodedSpace", "matrixSize"]
-            crop_size = (
-                int(et_query(et_root, enc + ["x"])),
-                int(et_query(et_root, enc + ["y"])),
-            )
+            kspace = transforms.to_tensor(hf['kspace'][()])
+            if kspace.shape[3] == 320:
+                # extract target image width, height from ismrmrd header
+                enc = ["encoding", "encodedSpace", "matrixSize"]
+                crop_size = (
+                    int(et_query(et_root, enc + ["x"])),
+                    int(et_query(et_root, enc + ["y"])),
+                )
 
-            # inverse Fourier Transform to get zero filled solution
-            masked_kspace = kspace * get_gro_mask(kspace.shape) + 0.0
-            slice_image = fastmri.ifft2c(masked_kspace)
+                # inverse Fourier Transform to get zero filled solution
+                masked_kspace = kspace * get_gro_mask(kspace.shape) + 0.0
+                slice_image = fastmri.ifft2c(masked_kspace)
 
-            # check for FLAIR 203
-            if slice_image.shape[-2] < crop_size[1]:
-                crop_size = (slice_image.shape[-2], slice_image.shape[-2])
+                # check for FLAIR 203
+                if slice_image.shape[-2] < crop_size[1]:
+                    crop_size = (slice_image.shape[-2], slice_image.shape[-2])
 
-            # crop input image
-            image = transforms.complex_center_crop(slice_image, crop_size)
+                # crop input image
+                image = transforms.complex_center_crop(slice_image, crop_size)
 
-            # absolute value
-            image = fastmri.complex_abs(image)
+                # absolute value
+                image = fastmri.complex_abs(image)
 
-            # apply Root-Sum-of-Squares if multicoil data
-            image = fastmri.rss(image, dim=1)
+                # apply Root-Sum-of-Squares if multicoil data
+                image = fastmri.rss(image, dim=1)
 
-            reconstructions[fname.name] = image
+                reconstructions[fname.name] = image
 
     fastmri.save_reconstructions(reconstructions, out_dir)
 
 data = Path('/storage/fastMRI_brain/data/multicoil_test')
-out = 'zero_fill_out'
+out = Path('zero_fill_out')
 
 test_zero_filled(data, out)
