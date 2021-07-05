@@ -24,8 +24,10 @@ def get_gro_mask(mask_shape):
 def load_a(path, num):
         data = []
         usamp_data = []
-
+        total=0
         for fname in tqdm(list(path.glob("*.h5"))):
+            total = total + 1
+            print(f"Total Files Processed: {total}")
             with h5py.File(fname, "r") as hf:
                 kspace = transforms.to_tensor(hf['kspace'][()])
                 if kspace.shape[3] == 320:
