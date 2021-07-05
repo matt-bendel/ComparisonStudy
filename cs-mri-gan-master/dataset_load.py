@@ -30,7 +30,7 @@ def load_a(path, num):
             print(f"Total Files Processed: {total}")
             with h5py.File(fname, "r") as hf:
                 kspace = transforms.to_tensor(hf['kspace'][()])
-                if kspace.shape[3] == 320:
+                if kspace.shape[3] == 320 and kspace.shape[1] == 16:
                     mask = get_gro_mask(kspace.shape)
                     usamp_kspace = kspace * mask + 0.0
 
@@ -61,6 +61,11 @@ def load_a(path, num):
 
 data = Path('/storage/fastMRI_brain/data/multicoil_train')
 train_gt, train_us = load_a(data,0)
+
+#data = Path('/storage/fastMRI_brain/data/multicoil_val')
+#train_gt_2, train_us_2 = load_a(data,0)
+
+print(f"TOTAL NUMBER OF TRAINING IMAGES: {train_gt.shape[0]}")
 
 with open(os.path.join(save_path,'training_gt.pickle'),'wb') as f:
     pickle.dump(train_gt,f,protocol=4)

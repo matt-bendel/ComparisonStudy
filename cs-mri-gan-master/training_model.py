@@ -1,6 +1,6 @@
+import tensorflow as tf
 from keras.utils import multi_gpu_model 
 import numpy as np
-import tensorflow as tf
 import pickle
 from keras.models import Model, Input
 from keras.optimizers import Adam, RMSprop
@@ -257,6 +257,8 @@ clip_val = 0.05
 in_shape_gen = (320,320,2)
 in_shape_dis = (320,320,1)
 accel = 3
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 d_model = discriminator (inp_shape = in_shape_dis, trainable = True)
 d_model.summary()
