@@ -14,7 +14,7 @@ import numpy as np
 import os
 
 def generate_gro_mask(shape):
-    return genfromtxt(os.path.dirname(os.path.abspath(__file__)) + f'/gro_r4_mask_{shape}.csv', delimiter=',')
+    return genfromtxt(os.path.dirname(os.path.abspath(__file__)) + f'/gro_r4_mask.csv', delimiter=',')
 
 
 def save_reconstructions(reconstructions: Dict[str, np.ndarray], out_dir: Path):
