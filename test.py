@@ -22,6 +22,40 @@ def get_gro_mask(mask_shape):
     mask_shape[-2] = num_cols
     return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
+def general():
+    data = []
+    usamp_data = []
+
+    with h5py.File('file_brain_AXFLAIR_200_6002441.h5', "r") as hf:
+        kspace = transforms.to_tensor(hf['kspace'][()])
+        if kspace.shape[3] == 320:
+            mask = get_gro_mask(kspace.shape)
+            usamp_kspace = kspace * mask + 0.0
+
+            crop_size = (320, 320)
+
+            slice_image = fastmri.ifft2c(kspace)
+            usamp_slice_image = fastmri.ifft2c(usamp_kspace)
+
+            # check for FLAIR 203
+            if slice_image.shape[-2] < crop_size[1]:
+                crop_size = (slice_image.shape[-2], slice_image.shape[-2])
+
+            # crop input image
+            image = transforms.complex_center_crop(slice_image, crop_size)
+            usamp_image = transforms.complex_center_crop(usamp_slice_image, crop_size)
+
+            # apply Root-Sum-of-Squares if multicoil data
+            image = fastmri.rss(image, dim=1)
+            image = fastmri.complex_abs(image)
+            usamp_image = fastmri.rss(usamp_image, dim=1)
+
+            for i in range(image.shape[0]):
+                data.append(image[i, :, :].numpy())
+                usamp_data.append(usamp_image[i, :, :, :].numpy())
+
+        print(np.asarray(data).shape)
+
 def test_zero_fill():
     with h5py.File('file_brain_AXFLAIR_200_6002441.h5', "r") as hf:
         et_root = etree.fromstring(hf["ismrmrd_header"][()])
@@ -33,8 +67,6 @@ def test_zero_fill():
             int(et_query(et_root, enc + ["y"])),
             int(et_query(et_root, enc + ["y"])),
         )
-
-        print(crop_size)
 
         # inverse Fourier Transform to get zero filled solution
         mask = get_gro_mask(kspace.shape)
@@ -49,18 +81,19 @@ def test_zero_fill():
 
         # crop input image
         image = transforms.complex_center_crop(slice_image, crop_size)
+        print(image.shape)
         gt_image = transforms.complex_center_crop(gt_slice_image, crop_size)
 
         # absolute value
         image = fastmri.complex_abs(image)
+        print(image.shape)
         gt_image = fastmri.complex_abs(gt_image)
 
         # apply Root-Sum-of-Squares if multicoil data
         image = fastmri.rss(image, dim=1)
-        # image = transforms.center_crop(image, (320, 320))
+        print(image.shape)
 
         gt_image = fastmri.rss(gt_image, dim=1)
-        # gt_image = transforms.center_crop()
 
         #Print first slice of both GT and R=4 images
         fig = plt.figure()
@@ -136,4 +169,4 @@ def test_cs_tv():
         plt.xlabel('R=4 GRO Downsampled')
         plt.show()
 
-test_cs_tv()
+general()

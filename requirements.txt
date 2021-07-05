@@ -9,3 +9,4 @@ torchaudio
 packaging
 pyyaml
 scikit-image
+tensorflow
