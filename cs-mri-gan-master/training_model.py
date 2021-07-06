@@ -224,7 +224,6 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data,  n_epochs, n_ba
             
                 ix_1 =  np.random.randint(0, u_sampled_data.shape[0], half_batch)
                 X_fake  = g_par.predict(u_sampled_data[ix_1])
-                print(X_fake.shape)
                 y_fake = -np.ones((half_batch,n_patch,n_patch,1))
             
                 X, y = np.vstack((X_real, X_fake)), np.vstack((y_real,y_fake))
