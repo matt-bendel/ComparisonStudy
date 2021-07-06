@@ -52,10 +52,13 @@ def load_a(path, num):
                     # apply Root-Sum-of-Squares if multicoil data
                     image = fastmri.rss(image, dim=1)
                     usamp_image = fastmri.rss(usamp_image, dim=1)
-
+					
                     for i in range(image.shape[0]):
-                        data.append(image[i,:,:].numpy())
-                        usamp_data.append(usamp_image[i,:,:,:].numpy())
+                        slice_gt = image[i].numpy()
+                        data.append(slice_gt)
+
+                        slice_us = usamp_image[i].numpy()
+                        usamp_data.append(slice_us)
 
         return np.asarray(data), np.asarray(usamp_data)
 

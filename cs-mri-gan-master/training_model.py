@@ -29,7 +29,7 @@ def discriminator(inp_shape = (256,256,1), trainable = True):
     
     gamma_init = tf.random_normal_initializer(1., 0.02)
     
-    inp = Input(shape = (256,256,1))
+    inp = Input(shape = (320,320,1))
     
     l0 = Conv2D(64, (4,4), strides = (2,2), padding = 'same', use_bias = True, kernel_initializer = 'he_normal', bias_initializer = 'zeros')(inp) #b_init is set to none, maybe they are not using bias here, but I am.
     l0 = LeakyReLU(alpha=0.2)(l0)
@@ -224,6 +224,7 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data,  n_epochs, n_ba
             
                 ix_1 =  np.random.randint(0, u_sampled_data.shape[0], half_batch)
                 X_fake  = g_par.predict(u_sampled_data[ix_1])
+                print(X_fake.shape)
                 y_fake = -np.ones((half_batch,n_patch,n_patch,1))
             
                 X, y = np.vstack((X_real, X_fake)), np.vstack((y_real,y_fake))
@@ -276,9 +277,6 @@ opt1 = Adam(lr = 0.0001, beta_1 = 0.5)
 gan_model.compile(loss = [wloss, 'mae', mssim], optimizer = opt1, loss_weights = [0.01, 20.0, 1.0]) #loss weights for generator training
 n_patch=d_model.output_shape[1]
 
-################ MODIFICATION ###################
-
-#################################################
 data_path='training_gt.pickle' #Ground truth
 usam_path='training_usamp.pickle' #Zero-filled reconstructions
 
@@ -286,7 +284,11 @@ df = open(data_path,'rb')
 uf = open(usam_path,'rb')
 
 dataset_real = pickle.load(df)
+dataset_real = np.expand_dims(dataset_real, axis=-1)
 u_sampled_data_2c = pickle.load(uf)
+
+f = open('log_a5.txt', 'x')
+f = open('log_a5.txt', 'a')
 
 train(g_par, d_par, gan_model, dataset_real, u_sampled_data_2c, n_epochs, n_batch, n_critic, clip_val, n_patch, f)
 
