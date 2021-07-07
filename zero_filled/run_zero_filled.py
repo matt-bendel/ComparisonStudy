@@ -20,7 +20,7 @@ def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
     inds = mask_shape[-2]
     extra = 400 - inds
-    first_stop = extra / 2
+    first_stop = extra // 2
     last_stop = 400 - first_stop
     mask = generate_gro_mask(inds)[first_stop:last_stop]
     shape = np.array(mask_shape)
@@ -54,7 +54,7 @@ def test_zero_filled(data_dir, out_dir):
     fastmri.save_reconstructions(reconstructions, out_dir)
 
 data = Path('/storage/fastMRI/data/singlecoil_val')
-data = Path('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test/singlecoil_val')
+#data = Path('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test/singlecoil_val')
 out = Path('out')
 
 test_zero_filled(data, out)
