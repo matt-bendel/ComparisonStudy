@@ -1,17 +1,13 @@
 #### THIS FILE IS USED FOR TESTING CONCEPTS/IDEAS BEFORE IMPLEMENTATION
-import xml.etree.ElementTree as etree
 import numpy as np
 
 from utils import fastmri
 from utils.fastmri.utils import generate_gro_mask
 import h5py
 from utils.fastmri.data import transforms
-from utils.fastmri.data.mri_data import et_query
 import torch
 import matplotlib.pyplot as plt
-import time
 import os
-
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def get_gro_mask(mask_shape):
@@ -26,7 +22,13 @@ def get_gro_mask(mask_shape):
     return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
 def general():
-    with h5py.File('file1002568.h5', "r") as hf:
+    with h5py.File('file1000001.h5', "r") as hf:
+        print('Keys:', list(hf.keys()))
+        print('Attrs:', dict(hf.attrs))
+        print(hf.attrs['acquisition'][0:6])
+        if hf.attrs['acquisition'][0:6] == 'CORPDF':
+            print('good')
+        exit()
         crop_size = (320,320)
         kspace = transforms.to_tensor(hf['kspace'][()])
         mask = get_gro_mask(kspace.shape)

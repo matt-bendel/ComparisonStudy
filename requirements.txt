@@ -11,3 +11,6 @@ pyyaml
 scikit-image
 tensorflow-gpu==1.15.0
 keras==2.1.6
+sigpy
+psutil
+runstats

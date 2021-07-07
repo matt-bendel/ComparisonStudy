@@ -51,6 +51,7 @@ def test_zero_filled(data_dir, out_dir):
     fastmri.save_reconstructions(reconstructions, out_dir)
 
 data = Path('/storage/fastMRI/data/singlecoil_val')
-out = Path('zero_fill_out')
+data = Path('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test/singlecoil_val')
+out = Path('out')
 
 test_zero_filled(data, out)
