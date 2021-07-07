@@ -2,6 +2,7 @@
 import numpy as np
 
 from utils import fastmri
+from utils.fastmri.data.transforms import tensor_to_complex_np
 from utils.fastmri.utils import generate_gro_mask
 import h5py
 from utils.fastmri.data import transforms
@@ -12,8 +13,7 @@ os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
-    inds = mask_shape[-2]
-    mask = generate_gro_mask(mask_shape[3])[0:inds]
+    mask = generate_gro_mask(mask_shape[-2])
     shape = np.array(mask_shape)
     shape[:-3] = 1
     num_cols = mask_shape[-2]
@@ -22,14 +22,8 @@ def get_gro_mask(mask_shape):
     return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
 def general():
-    with h5py.File('file1000001.h5', "r") as hf:
-        print('Keys:', list(hf.keys()))
-        print('Attrs:', dict(hf.attrs))
-        print(hf.attrs['acquisition'][0:6])
-        if hf.attrs['acquisition'][0:6] == 'CORPDF':
-            print('good')
-        exit()
-        crop_size = (320,320)
+    slice = 10
+    with h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/singlecoil_val/file_brain_AXT2_203_2030106.h5', "r") as hf:
         kspace = transforms.to_tensor(hf['kspace'][()])
         mask = get_gro_mask(kspace.shape)
         usamp_kspace = kspace * mask + 0.0
@@ -37,18 +31,15 @@ def general():
         image = fastmri.ifft2c(kspace)
         usamp_image = fastmri.ifft2c(usamp_kspace)
 
-        # crop input image
-        image = transforms.complex_center_crop(image, crop_size)
-        usamp_image = transforms.complex_center_crop(usamp_image, crop_size)
-
-        image = fastmri.complex_abs(image)[30]
-        usamp_image = fastmri.complex_abs(usamp_image)[30]
+        image = fastmri.complex_abs(image)[slice]
+        usamp_image = fastmri.complex_abs(usamp_image)[slice]
 
         fig = plt.figure()
         ax1 = fig.add_subplot(1, 3, 1)
         ax1.imshow(np.abs(image.numpy()), cmap='gray')
         plt.xlabel('Calculated GT')
-        cropped_image = transforms.to_tensor(hf['reconstruction_esc'][()])[30]
+        cropped_image = transforms.to_tensor(hf['reconstruction_rss'][()])[slice]
+        cropped_image = transforms.center_crop(cropped_image, (320,320))
         ax2 = fig.add_subplot(1,3,2)
         ax2.imshow(np.abs(cropped_image.numpy()),cmap='gray')
         plt.xlabel('Given GT')

@@ -13,11 +13,7 @@ save_path=''
 
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
-    inds = mask_shape[-2]
-    extra = 400 - inds
-    first_stop = extra / 2
-    last_stop = 400 - first_stop
-    mask = generate_gro_mask(inds)[first_stop:last_stop]
+    mask = generate_gro_mask(mask_shape[-2])
     shape = np.array(mask_shape)
     shape[:-3] = 1
     num_cols = mask_shape[-2]

@@ -123,7 +123,7 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
                 preprocesses the raw data into appropriate form. The transform
                 function should take 'kspace', 'target', 'attributes',
                 'filename', and 'slice' as inputs. 'target' may be null for
-                test data.
+                test_dir data.
             sample_rates: Optional; A sequence of floats between 0 and 1.
                 This controls what fraction of the slices should be loaded.
                 When creating subsampled datasets either set sample_rates
@@ -215,7 +215,7 @@ class SliceDataset(torch.utils.data.Dataset):
             transform: Optional; A callable object that pre-processes the raw
                 data into appropriate form. The transform function should take
                 'kspace', 'target', 'attributes', 'filename', and 'slice' as
-                inputs. 'target' may be null for test data.
+                inputs. 'target' may be null for test_dir data.
             use_dataset_cache: Whether to cache dataset metadata. This is very
                 useful for large datasets like the brain data.
             sample_rate: Optional; A float between 0 and 1. This controls what fraction

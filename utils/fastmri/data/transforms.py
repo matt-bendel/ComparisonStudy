@@ -260,7 +260,7 @@ class UnetDataTransform:
         Args:
             kspace: Input k-space of shape (num_coils, rows, cols) for
                 multi-coil data or (rows, cols) for single coil data.
-            mask: Mask from the test dataset.
+            mask: Mask from the test_dir dataset.
             target: Target image.
             attrs: Acquisition related information stored in the HDF5 object.
             fname: File name.
@@ -355,7 +355,7 @@ class VarNetDataTransform:
         Args:
             kspace: Input k-space of shape (num_coils, rows, cols) for
                 multi-coil data.
-            mask: Mask from the test dataset.
+            mask: Mask from the test_dir dataset.
             target: Target image.
             attrs: Acquisition related information stored in the HDF5 object.
             fname: File name.

@@ -4,7 +4,6 @@ This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
 
-import xml.etree.ElementTree as etree
 import numpy as np
 from pathlib import Path
 
@@ -12,17 +11,12 @@ from utils import fastmri
 from utils.fastmri.utils import generate_gro_mask
 import h5py
 from utils.fastmri.data import transforms
-from utils.fastmri.data.mri_data import et_query
 from tqdm import tqdm
 import torch
 
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
-    inds = mask_shape[-2]
-    extra = 400 - inds
-    first_stop = extra // 2
-    last_stop = 400 - first_stop
-    mask = generate_gro_mask(inds)[first_stop:last_stop]
+    mask = generate_gro_mask(mask_shape[-2])
     shape = np.array(mask_shape)
     shape[:-3] = 1
     num_cols = mask_shape[-2]
@@ -53,8 +47,8 @@ def test_zero_filled(data_dir, out_dir):
 
     fastmri.save_reconstructions(reconstructions, out_dir)
 
-data = Path('/storage/fastMRI/data/singlecoil_val')
-#data = Path('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test/singlecoil_val')
+data = Path('/storage/fastMRI_brain/data/singlecoil_val')
+#data = Path('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/singlecoil_val')
 out = Path('out')
 
 test_zero_filled(data, out)

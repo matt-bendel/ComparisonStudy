@@ -83,7 +83,7 @@ class FastMriDataModule(pl.LightningDataModule):
         val_transform: Callable,
         test_transform: Callable,
         combine_train_val: bool = False,
-        test_split: str = "test",
+        test_split: str = "test_dir",
         test_path: Optional[Path] = None,
         sample_rate: Optional[float] = None,
         volume_sample_rate: Optional[float] = None,
@@ -100,11 +100,11 @@ class FastMriDataModule(pl.LightningDataModule):
             challenge: Name of challenge from ('multicoil', 'singlecoil').
             train_transform: A transform object for the training split.
             val_transform: A transform object for the validation split.
-            test_transform: A transform object for the test split.
+            test_transform: A transform object for the test_dir split.
             combine_train_val: Whether to combine train and val splits into one
                 large train dataset. Use this for leaderboard submission.
-            test_split: Name of test split from ("test", "challenge").
-            test_path: An optional test path. Passing this overwrites data_path
+            test_split: Name of test_dir split from ("test_dir", "challenge").
+            test_path: An optional test_dir path. Passing this overwrites data_path
                 and test_split.
             sample_rate: Fraction of slices of the training data split to use. Can be
                 set to less than 1.0 for rapid prototyping. If not set, it defaults to 1.0.
@@ -181,7 +181,7 @@ class FastMriDataModule(pl.LightningDataModule):
                 use_dataset_cache=self.use_dataset_cache_file,
             )
         else:
-            if data_partition in ("test", "challenge") and self.test_path is not None:
+            if data_partition in ("test_dir", "challenge") and self.test_path is not None:
                 data_path = self.test_path
             else:
                 data_path = self.data_path / f"{self.challenge}_{data_partition}"
@@ -278,7 +278,7 @@ class FastMriDataModule(pl.LightningDataModule):
             "--test_path",
             default=None,
             type=Path,
-            help="Path to data for test mode. This overwrites data_path and test_split",
+            help="Path to data for test_dir mode. This overwrites data_path and test_split",
         )
         parser.add_argument(
             "--challenge",
@@ -289,10 +289,10 @@ class FastMriDataModule(pl.LightningDataModule):
         )
         parser.add_argument(
             "--test_split",
-            choices=("test", "challenge"),
-            default="test",
+            choices=("test_dir", "challenge"),
+            default="test_dir",
             type=str,
-            help="Which data split to use as test split",
+            help="Which data split to use as test_dir split",
         )
         parser.add_argument(
             "--sample_rate",
