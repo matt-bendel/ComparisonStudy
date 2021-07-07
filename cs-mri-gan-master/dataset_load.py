@@ -13,10 +13,14 @@ save_path=''
 
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
-    mask = generate_gro_mask(mask_shape[3])
+    inds = mask_shape[-2]
+    extra = 400 - inds
+    first_stop = extra / 2
+    last_stop = 400 - first_stop
+    mask = generate_gro_mask(inds)[first_stop:last_stop]
     shape = np.array(mask_shape)
     shape[:-3] = 1
-    num_cols = shape[-2]
+    num_cols = mask_shape[-2]
     mask_shape = [1 for _ in shape]
     mask_shape[-2] = num_cols
     return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
@@ -53,7 +57,7 @@ def load_a(path, num):
 
         return np.asarray(data), np.asarray(usamp_data)
 
-data = Path('/storage/fastMRI_brain/data/multicoil_train')
+data = Path('/storage/fastMRI/data/singlecoil_train')
 train_gt, train_us = load_a(data,0)
 
 #data = Path('/storage/fastMRI_brain/data/multicoil_val')
