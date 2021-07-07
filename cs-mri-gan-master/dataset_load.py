@@ -30,35 +30,26 @@ def load_a(path, num):
             print(f"Total Files Processed: {total}")
             with h5py.File(fname, "r") as hf:
                 kspace = transforms.to_tensor(hf['kspace'][()])
-                if kspace.shape[3] == 320 and kspace.shape[1] == 16:
-                    mask = get_gro_mask(kspace.shape)
-                    usamp_kspace = kspace * mask + 0.0
+                mask = get_gro_mask(kspace.shape)
+                usamp_kspace = kspace * mask + 0.0
 
-                    crop_size = (320, 320)
+                crop_size = (320, 320)
 
-                    slice_image = fastmri.ifft2c(kspace)
-                    usamp_slice_image = fastmri.ifft2c(usamp_kspace)
+                slice_image = fastmri.ifft2c(kspace)
+                usamp_slice_image = fastmri.ifft2c(usamp_kspace)
 
-                    # check for FLAIR 203
-                    if slice_image.shape[-2] < crop_size[1]:
-                        crop_size = (slice_image.shape[-2], slice_image.shape[-2])
+                # crop input image
+                image = transforms.complex_center_crop(slice_image, crop_size)
+                image = fastmri.complex_abs(image)
 
-                    # crop input image
-                    image = transforms.complex_center_crop(slice_image, crop_size)
-                    image = fastmri.complex_abs(image)
+                usamp_image = transforms.complex_center_crop(usamp_slice_image, crop_size)
 
-                    usamp_image = transforms.complex_center_crop(usamp_slice_image, crop_size)
+                for i in range(image.shape[0]):
+                    slice_gt = image[i].numpy()
+                    data.append(slice_gt)
 
-                    # apply Root-Sum-of-Squares if multicoil data
-                    image = fastmri.rss(image, dim=1)
-                    usamp_image = fastmri.rss(usamp_image, dim=1)
-					
-                    for i in range(image.shape[0]):
-                        slice_gt = image[i].numpy()
-                        data.append(slice_gt)
-
-                        slice_us = usamp_image[i].numpy()
-                        usamp_data.append(slice_us)
+                    slice_us = usamp_image[i].numpy()
+                    usamp_data.append(slice_us)
 
         return np.asarray(data), np.asarray(usamp_data)
 

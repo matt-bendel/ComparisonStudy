@@ -128,7 +128,7 @@ def evaluate(args, recons_key):
                 if 320 != transforms.to_tensor(target['kspace'][()]).shape[3]:
                     continue
 
-                target = recover_target(target)
+                target = target['reconstruction_esc']
                 recons = recons["reconstruction"][()]
                 target = transforms.center_crop(
                     target, (320, 320)
