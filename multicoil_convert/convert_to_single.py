@@ -15,13 +15,8 @@ def convert(in_path, out_path):
     for fname in tqdm(list(in_path.glob("*.h5"))):
         with h5py.File(fname, "r") as hf:
             kspace = transforms.to_tensor(hf['kspace'][()])
-            crop_size = (320,320)
-            if kspace.shape[-2] < 320:
-                continue
-
             image = fastmri.ifft2c(kspace)
             image = fastmri.rss(image, dim=1)
-            image = transforms.complex_center_crop(image, crop_size)
             new_kspace = fastmri.fft2c(image)
             new_kspace = tensor_to_complex_np(new_kspace)
 
