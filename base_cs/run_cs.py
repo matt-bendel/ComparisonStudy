@@ -78,8 +78,6 @@ def cs_total_variation(args, kspace, mask, slice):
     Returns:
         np.array: Reconstructed image.
     """
-    crop_size = (320, 320)
-
     kspace = kspace.unsqueeze(0)
     mask = mask.permute(0,2,1)
     kspace = tensor_to_complex_np(kspace)
@@ -96,9 +94,7 @@ def cs_total_variation(args, kspace, mask, slice):
     pred = mr.app.TotalVariationRecon(kspace, sens_maps, 1, max_iter=args.num_iters).run()
     pred = torch.from_numpy(np.abs(pred))
 
-    cropped_image = T.center_crop(pred, crop_size)
-
-    return cropped_image
+    return pred
 
 
 def save_outputs(outputs, output_path):

@@ -30,15 +30,10 @@ def test_zero_filled(data_dir, out_dir):
     for fname in tqdm(list(data_dir.glob("*.h5"))):
         with h5py.File(fname, "r") as hf:
             kspace = transforms.to_tensor(hf['kspace'][()])
-            # extract target image width, height from ismrmrd header
-            crop_size = (320,320)
 
             # inverse Fourier Transform to get zero filled solution
             masked_kspace = kspace * get_gro_mask(kspace.shape) + 0.0
-            slice_image = fastmri.ifft2c(masked_kspace)
-
-            # crop input image
-            image = transforms.complex_center_crop(slice_image, crop_size)
+            image = fastmri.ifft2c(masked_kspace)
 
             # absolute value
             image = fastmri.complex_abs(image)

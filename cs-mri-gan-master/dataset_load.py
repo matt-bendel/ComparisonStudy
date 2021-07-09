@@ -33,16 +33,10 @@ def load_a(path, num):
                 mask = get_gro_mask(kspace.shape)
                 usamp_kspace = kspace * mask + 0.0
 
-                crop_size = (320, 320)
+                image = fastmri.ifft2c(kspace)
+                usamp_image = fastmri.ifft2c(usamp_kspace)
 
-                slice_image = fastmri.ifft2c(kspace)
-                usamp_slice_image = fastmri.ifft2c(usamp_kspace)
-
-                # crop input image
-                image = transforms.complex_center_crop(slice_image, crop_size)
                 image = fastmri.complex_abs(image)
-
-                usamp_image = transforms.complex_center_crop(usamp_slice_image, crop_size)
 
                 for i in range(image.shape[0]):
                     slice_gt = image[i].numpy()
