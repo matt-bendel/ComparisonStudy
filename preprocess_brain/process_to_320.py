@@ -6,7 +6,7 @@ from tqdm import tqdm
 from utils import fastmri
 from argparse import ArgumentParser
 from pathlib import Path
-import numpy as np
+from torch.nn import functional as F
 
 def preprocess(in_path, out_path):
     print('BEGINNING PROCESS')
@@ -25,7 +25,8 @@ def preprocess(in_path, out_path):
 
             if image.shape[-2] < 320:
                 diff = (320 - image.shape[-2]) // 2 + 1
-                image = np.pad(image, [(0,0), (diff, diff), (diff, diff), (0, 0)])
+                padding = (0, 0, diff, diff, diff, diff, 0, 0)
+                image = F.pad(image, padding, "constant", 0)
 
             image = transforms.complex_center_crop(image, (320, 320))
 
