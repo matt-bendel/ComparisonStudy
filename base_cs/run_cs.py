@@ -6,6 +6,8 @@ LICENSE file in the root directory of this source tree.
 """
 
 import multiprocessing
+import pickle
+
 import pathlib
 import time
 from argparse import ArgumentParser
@@ -23,7 +25,6 @@ import sigpy.mri as mr
 import random
 
 from utils.fastmri.utils import generate_gro_mask
-import psutil
 
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
@@ -193,24 +194,24 @@ def create_arg_parser():
 
     return parser
 
-parser = create_arg_parser()
-parser.add_argument('--output_path', type=pathlib.Path, default=pathlib.Path('out'),
-                    help='Path to save the reconstructions to')
-parser.add_argument('--num-iters', type=int, default=200,
-                    help='Number of iterations to run the reconstruction algorithm')
-parser.add_argument('--reg-wt', type=float, default=1e-10,
-                    help='Regularization weight parameter')
-parser.add_argument('--num-procs', type=int, default=14,
-                    help='Number of processes. Set to 0 to disable multiprocessing.')
-parser.add_argument('--device', type=int, default=0,
-                    help='Cuda device idx (-1 for CPU)')
-parser.add_argument('--seed', default=42, type=int, help='Seed for random number generators')
-args = parser.parse_args()
-
-random.seed(args.seed)
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-
-data = create_data_loader(args)
 if __name__ == "__main__":
+    parser = create_arg_parser()
+    parser.add_argument('--output_path', type=pathlib.Path, default=pathlib.Path('out'),
+                        help='Path to save the reconstructions to')
+    parser.add_argument('--num-iters', type=int, default=200,
+                        help='Number of iterations to run the reconstruction algorithm')
+    parser.add_argument('--reg-wt', type=float, default=1e-10,
+                        help='Regularization weight parameter')
+    parser.add_argument('--num-procs', type=int, default=14,
+                        help='Number of processes. Set to 0 to disable multiprocessing.')
+    parser.add_argument('--device', type=int, default=0,
+                        help='Cuda device idx (-1 for CPU)')
+    parser.add_argument('--seed', default=42, type=int, help='Seed for random number generators')
+    args = parser.parse_args()
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    data = create_data_loader(args)
     run_cs(args)
