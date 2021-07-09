@@ -25,7 +25,7 @@ def preprocess(in_path, out_path):
 
             if image.shape[-2] < 320:
                 diff = (320 - image.shape[-2]) // 2 + 1
-                image = np.pad(image, [(0,0), (diff, diff), (diff, diff), (0, 0)], pad_width=diff)
+                image = np.pad(image, [(0,0), (diff, diff), (diff, diff), (0, 0)])
 
             image = transforms.complex_center_crop(image, (320, 320))
 
