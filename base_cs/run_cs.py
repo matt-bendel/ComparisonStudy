@@ -91,7 +91,7 @@ def cs_total_variation(args, kspace, mask, slice):
         sens_maps = mr.app.EspiritCalib(kspace).run()
 
     # use Total Variation Minimization to reconstruct the image
-    pred = mr.app.TotalVariationRecon(kspace, sens_maps, 1, max_iter=args.num_iters).run()
+    pred = mr.app.TotalVariationRecon(kspace, sens_maps, 1e-10, max_iter=args.num_iters).run()
     pred = torch.from_numpy(np.abs(pred))
 
     return pred
@@ -100,13 +100,19 @@ def cs_total_variation(args, kspace, mask, slice):
 def save_outputs(outputs, output_path):
     """Saves reconstruction outputs to output_path."""
     reconstructions = defaultdict(list)
+    times = defaultdict(list)
+    
     for fname, slice_num, pred, recon_time in outputs:
         reconstructions[fname].append((slice_num, pred))
+        time[fname].append((slice_num, recon_time))
 
     reconstructions = {
         fname: np.stack([pred for _, pred in sorted(slice_preds)])
         for fname, slice_preds in reconstructions.items()
     }
+
+    with open('out/cs_times.pkl', 'wb') as f:
+        pickle.dump(times, f)
 
     save_reconstructions(reconstructions, output_path)
 
@@ -192,9 +198,9 @@ parser.add_argument('--output_path', type=pathlib.Path, default=pathlib.Path('ou
                     help='Path to save the reconstructions to')
 parser.add_argument('--num-iters', type=int, default=200,
                     help='Number of iterations to run the reconstruction algorithm')
-parser.add_argument('--reg-wt', type=float, default=1e-3,
+parser.add_argument('--reg-wt', type=float, default=1e-10,
                     help='Regularization weight parameter')
-parser.add_argument('--num-procs', type=int, default=4,
+parser.add_argument('--num-procs', type=int, default=14,
                     help='Number of processes. Set to 0 to disable multiprocessing.')
 parser.add_argument('--device', type=int, default=0,
                     help='Cuda device idx (-1 for CPU)')
