@@ -12,7 +12,13 @@ def convert(in_path, out_path):
     print('BEGINNING CONVERSION')
     new_files_attrs = {}
     new_files_data = {}
+    existing_out = list(out_path.glob("*.h5"))
     for fname in tqdm(list(in_path.glob("*.h5"))):
+        new_name = Path(f'/storage/fastMRI_brain/data/singlecoil_{args.data_type}/' + fname.name)
+        if new_name in existing_out:
+            print('SKIPPING')
+            continue
+
         with h5py.File(fname, "r") as hf:
             kspace = transforms.to_tensor(hf['kspace'][()])
             image = fastmri.ifft2c(kspace)

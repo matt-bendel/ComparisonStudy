@@ -9,6 +9,8 @@ from utils.fastmri.data import transforms
 import torch
 import matplotlib.pyplot as plt
 import os
+from tqdm import tqdm
+from pathlib import Path
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 def get_gro_mask(mask_shape):
@@ -49,4 +51,14 @@ def general():
 
         plt.show()
 
-general()
+data_path = Path(f'/storage/fastMRI_brain/data/multicoil_train')
+out_path = Path(f'/storage/fastMRI_brain/data/singlecoil_train')
+
+test = list(out_path.glob("*.h5"))
+for fname in tqdm(list(data_path.glob("*.h5"))):
+    new_name = Path('/storage/fastMRI_brain/data/singlecoil_train/' + fname.name)
+    if new_name in test:
+        continue
+    else:
+        print('NEW')
+#general()
