@@ -192,7 +192,7 @@ parser.add_argument('--num-iters', type=int, default=200,
                     help='Number of iterations to run the reconstruction algorithm')
 parser.add_argument('--reg-wt', type=float, default=1e-10,
                     help='Regularization weight parameter')
-parser.add_argument('--num-procs', type=int, default=16,
+parser.add_argument('--num-procs', type=int, default=18,
                     help='Number of processes. Set to 0 to disable multiprocessing.')
 parser.add_argument('--device', type=int, default=0,
                     help='Cuda device idx (-1 for CPU)')
