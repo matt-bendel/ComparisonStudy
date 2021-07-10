@@ -96,7 +96,7 @@ def evaluate(args, recons_key):
         ) as recons:
             if args.acquisition and args.acquisition != target.attrs["acquisition"]:
                 continue
-            target = target['reconstruction_esc'][()]
+            target = target['reconstruction_rss'][()]
             recons = recons["reconstruction"][()]
 
             metrics.push(target, recons)

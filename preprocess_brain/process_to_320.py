@@ -73,7 +73,7 @@ parser.add_argument(
 args = parser.parse_args()
 data_path = Path(f'/storage/fastMRI_brain/data/singlecoil_{args.data_type}')
 out_path = Path(f'/storage/fastMRI_brain/data/Matt_preprocessed_data/singlecoil_{args.data_type}')
-# data_path = Path(f'/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/multicoil_{args.data_type}')
-# out_path = Path(f'/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/singlecoil_{args.data_type}')
+# data_path = Path(f'/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/singlecoil_{args.data_type}')
+# out_path = Path(f'/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/preprocessed/singlecoil_{args.data_type}')
 
 preprocess(data_path, out_path)

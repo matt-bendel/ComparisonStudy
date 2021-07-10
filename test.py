@@ -25,40 +25,31 @@ def get_gro_mask(mask_shape):
 
 def general():
     slice = 10
-    with h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/singlecoil_val/file_brain_AXT2_203_2030106.h5', "r") as hf:
-        kspace = transforms.to_tensor(hf['kspace'][()])
-        mask = get_gro_mask(kspace.shape)
-        usamp_kspace = kspace * mask + 0.0
-
-        image = fastmri.ifft2c(kspace)
-        usamp_image = fastmri.ifft2c(usamp_kspace)
-
-        image = fastmri.complex_abs(image)[slice]
-        usamp_image = fastmri.complex_abs(usamp_image)[slice]
+    with h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/preprocessed/singlecoil_val/file_brain_AXFLAIR_200_6002581.h5', "r") as target, \
+            h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/base_cs/out/file_brain_AXFLAIR_200_6002581.h5', 'r') as recons, \
+                h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/zero_filled/out/file_brain_AXFLAIR_200_6002581.h5') as zf:
+        ind = 4
+        target = target['reconstruction_rss'][()][ind]
+        target = transforms.center_crop(target, (320, 320))
+        zfr = zf["reconstruction"][()][ind]
+        recons = recons["reconstruction"][()][ind]
 
         fig = plt.figure()
         ax1 = fig.add_subplot(1, 3, 1)
-        ax1.imshow(np.abs(image.numpy()), cmap='gray')
-        plt.xlabel('Calculated GT')
-        cropped_image = transforms.to_tensor(hf['reconstruction_rss'][()])[slice]
-        cropped_image = transforms.center_crop(cropped_image, (320,320))
-        ax2 = fig.add_subplot(1,3,2)
-        ax2.imshow(np.abs(cropped_image.numpy()),cmap='gray')
-        plt.xlabel('Given GT')
-        ax3 = fig.add_subplot(1, 3, 3)
-        ax3.imshow(np.abs(usamp_image.numpy()), cmap='gray')
+        ax1.imshow(np.abs(target), cmap='gray')
+        plt.xlabel('GT')
+        ax1 = fig.add_subplot(1, 3, 2)
+        ax1.imshow(np.abs(zfr), cmap='gray')
         plt.xlabel('ZFR')
-
+        ax2 = fig.add_subplot(1,3,3)
+        ax2.imshow(np.abs(recons), cmap='gray')
+        plt.xlabel('CS-TV')
+        # ax3 = fig.add_subplot(1, 3, 3)
+        # ax3.imshow(np.abs(usamp_image.numpy()), cmap='gray')
+        # plt.xlabel('ZFR')
         plt.show()
 
 data_path = Path(f'/storage/fastMRI_brain/data/multicoil_train')
 out_path = Path(f'/storage/fastMRI_brain/data/singlecoil_train')
 
-test = list(out_path.glob("*.h5"))
-for fname in tqdm(list(data_path.glob("*.h5"))):
-    new_name = Path('/storage/fastMRI_brain/data/singlecoil_train/' + fname.name)
-    if new_name in test:
-        continue
-    else:
-        print('NEW')
-#general()
+general()
