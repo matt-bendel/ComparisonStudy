@@ -410,3 +410,19 @@ class VarNetDataTransform:
             max_value,
             crop_size,
         )
+
+
+def denoiser_normalize(data, is_complex=False, use_std=False):
+    if is_complex:
+        abs_data = fastmri.complex_abs(data)
+    else:
+        abs_data = data
+    if use_std:
+        scale = torch.std(abs_data)
+    else:
+        scale = torch.max(abs_data)
+    return data / scale, scale
+
+
+def denoiser_denormalize(data, scale):
+    return data * scale

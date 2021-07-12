@@ -9,6 +9,7 @@ import pathlib
 import random
 import shutil
 import time
+import os
 
 import numpy as np
 import torch
@@ -18,65 +19,113 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 from argparse import ArgumentParser
-
+from eval import nmse
 from utils import fastmri
 from utils.fastmri.data import transforms
-from utils.fastmri.data.mri_data import SliceDataset
-from dncnn import DnCNN
+from utils.fastmri.data.mri_data import SelectiveSliceData
+from utils.fastmri.models.unet.unet import UnetModel
+import wandb
+
+from utils.fastmri.utils import generate_gro_mask
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def get_gro_mask(mask_shape):
+    #Get Saved CSV Mask
+    mask = generate_gro_mask(mask_shape[-2])
+    shape = np.array(mask_shape)
+    shape[:-3] = 1
+    num_cols = mask_shape[-2]
+    mask_shape = [1 for _ in shape]
+    mask_shape[-2] = num_cols
+    return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
 class DataTransform:
     """
     Data Transformer for training U-Net models.
     """
 
-    def __init__(self, noise_std, resolution, mag_only=False, std_normalize=False, use_seed=True):
-        # self.mask_func = mask_func
-        self.resolution = resolution
-        # self.which_challenge = which_challenge
+    def __init__(self, args, use_seed=False):
         self.use_seed = use_seed
-        self.mag_only = mag_only
-        self.std_normalize = std_normalize
-        self.noise_std = noise_std
+        self.args = args
+        self.mask = None
+        if args.mask_path is not None:
+            self.mask = torch.load(args.mask_path)
+            if args.challenge == 'singlecoil':
+                self.mask = self.mask.squeeze(0)
 
     def __call__(self, kspace, target, attrs, fname, slice):
+        """
+        Args:
+            kspace (numpy.array): Input k-space of shape (num_coils, rows, cols, 2) for multi-coil
+                data or (rows, cols, 2) for single coil data.
+            target (numpy.array): Target image
+            attrs (dict): Acquisition related information stored in the HDF5 object.
+            fname (str): File name
+            slice (int): Serial number of the slice.
+        Returns:
+            (tuple): tuple containing:
+                image (torch.Tensor): Zero-filled input image.
+                target (torch.Tensor): Target image converted to a torch Tensor.
+                mean (float): Mean value used for normalization.
+                std (float): Standard deviation value used for normalization.
+                norm (float): L2 norm of the entire volume.
+        """
         kspace = transforms.to_tensor(kspace)
-        # Inverse Fourier Transform to get image
-        image = fastmri.ifft2c(kspace)
+
+        # Apply mask
+        mask = get_gro_mask(kspace.shape)
+        masked_kspace = (kspace * mask) + 0.0
+
+        # Inverse Fourier Transform to get zero filled solution
+        image = fastmri.ifft2c(masked_kspace)
         # Crop input image
-        image = transforms.complex_center_crop(image, (self.resolution, self.resolution))
+        image = transforms.complex_center_crop(image, (args.resolution, args.resolution))
         # Absolute value
-        if self.mag_only:
-            image = fastmri.complex_abs(image).unsqueeze(2)
+        image = fastmri.complex_abs(image)
 
-        image, scale = transforms.denoiser_normalize(image, is_complex=(not self.mag_only), use_std=self.std_normalize)
+        # Normalize input
+        image, mean, std = transforms.normalize_instance(image, eps=1e-11)
+        image = image.clamp(-6, 6)
 
-        # move real/imag to channel position
-        image = image.permute(2, 0, 1)
-        image = image.clamp(-1, 1)  # should only clamp if using std_normalization
-
-        target = image
-        # add zero mean noise
-        image = image + self.noise_std * torch.randn(image.size())
-        # target = target.clamp(-6, 6)
-        return image, target, scale, attrs['norm'].astype(np.float32)
+        # Normalize target
+        target = transforms.to_tensor(target)
+        target = transforms.normalize(target, mean, std, eps=1e-11)
+        target = target.clamp(-6, 6)
+        return image, target, mean, std, attrs['norm'].astype(np.float32)
 
 
 def create_datasets(args):
-    train_data = SliceDataset(
+    # select subset
+    fat_supress = None
+    strength_3T = None
+
+    if args.scanner_mode is not None:
+        fat_supress = (args.scanner_mode == "PDFS")
+    if args.scanner_strength is not None:
+        strength_3T = (args.scanner_strength >= 2.2)
+
+
+    train_data = SelectiveSliceData(
         root=args.data_path / f'{args.challenge}_train',
-        transform=DataTransform(args.std, args.resolution, mag_only=args.mag_only, std_normalize=args.std_normalize),
-        sample_rate=args.sample_rate,
-        challenge=args.challenge
-    )
-    dev_data = SliceDataset(
-        root=args.data_path / f'{args.challenge}_val',
-        transform=DataTransform(args.std, args.resolution, mag_only=args.mag_only, std_normalize=args.std_normalize,
-                                use_seed=True),
+        transform=DataTransform(args),
         sample_rate=args.sample_rate,
         challenge=args.challenge,
+        use_mid_slices=args.use_middle_slices,
+        fat_supress=fat_supress,
+        strength_3T=strength_3T,
+        restrict_size=True
+    )
+    dev_data = SelectiveSliceData(
+        root=args.data_path / f'{args.challenge}_val',
+        transform=DataTransform(args, use_seed=True),
+        sample_rate=args.sample_rate,
+        challenge=args.challenge,
+        use_mid_slices=args.use_middle_slices,
+        fat_supress=fat_supress,
+        strength_3T=strength_3T,
+        restrict_size=True
     )
     return dev_data, train_data
 
@@ -113,12 +162,12 @@ def train_epoch(args, epoch, model, data_loader, optimizer, writer):
     start_epoch = start_iter = time.perf_counter()
     global_step = epoch * len(data_loader)
     for iter, data in enumerate(data_loader):
-        input, target, scale, norm = data
-        input = input.to(args.device)
+        input, target, mean, std, norm = data
+        input = input.unsqueeze(1).to(args.device)
         target = target.to(args.device)
 
-        output = model(input)
-        loss = F.mse_loss(output, target, reduction='sum')
+        output = model(input).squeeze(1)
+        loss = F.l1_loss(output, target)
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -143,38 +192,45 @@ def evaluate(args, epoch, model, data_loader, writer):
     start = time.perf_counter()
     with torch.no_grad():
         for iter, data in enumerate(data_loader):
-            input, target, scale, norm = data
-            input = input.to(args.device)
+            input, target, mean, std, norm = data
+            input = input.unsqueeze(1).to(args.device)
             target = target.to(args.device)
-            output = model(input)
+            output = model(input).squeeze(1)
+
+            mean = mean.unsqueeze(1).unsqueeze(2).to(args.device)
+            std = std.unsqueeze(1).unsqueeze(2).to(args.device)
+            target = target * std + mean
+            output = output * std + mean
 
             # norm = norm.unsqueeze(1).unsqueeze(2).to(args.device)
             # loss = F.mse_loss(output / norm, target / norm, size_average=False)
-            loss = F.mse_loss(output, target, reduction='sum')
-            losses.append(loss.item())
+            for i in range(output.size(0)):
+                NMSE = nmse(target[i].cpu().numpy(), output[i].cpu().numpy())
+                losses.append(NMSE)
         writer.add_scalar('Dev_Loss', np.mean(losses), epoch)
+        wandb.log({"Val_NMSE": np.mean(losses)}, step=epoch)
     return np.mean(losses), time.perf_counter() - start
 
 
 def visualize(args, epoch, model, data_loader, writer):
-    def save_image(image, tag, args):
-        if not args.mag_only:
-            image = fastmri.complex_abs(image.permute(0, 2, 3, 1)).unsqueeze(3).permute(0, 3, 1, 2)
+    def save_image(image, tag):
         image -= image.min()
         image /= image.max()
         grid = torchvision.utils.make_grid(image, nrow=4, pad_value=1)
         writer.add_image(tag, grid, epoch)
+        grid_np = np.transpose(grid.cpu().numpy(), (1, 2, 0))
+        wandb.log({tag: wandb.Image(grid_np)}, step=epoch)
 
     model.eval()
     with torch.no_grad():
         for iter, data in enumerate(data_loader):
-            input, target, scale, norm = data
-            input = input.to(args.device)
-            target = target.to(args.device)
+            input, target, mean, std, norm = data
+            input = input.unsqueeze(1).to(args.device)
+            target = target.unsqueeze(1).to(args.device)
             output = model(input)
-            save_image(target, 'Target', args)
-            save_image(output, 'Reconstruction', args)
-            save_image(torch.abs(target - output), 'Error', args)
+            save_image(target, 'Target')
+            save_image(output, 'Reconstruction')
+            save_image(torch.abs(target - output), 'Error')
             break
 
 
@@ -195,14 +251,13 @@ def save_model(args, exp_dir, epoch, model, optimizer, best_dev_loss, is_new_bes
 
 
 def build_model(args):
-    if args.mag_only:
-        chans = 1
-    else:
-        chans = 2
-    model = DnCNN(
-        image_channels=chans,
-        n_channels=args.num_chans,
-    ).to(args.device)
+    model = UnetModel(
+        in_chans=1,
+        out_chans=1,
+        chans=args.num_chans,
+        num_pool_layers=args.num_pools,
+        drop_prob=args.drop_prob
+    ).to(torch.device('cuda'))
     return model
 
 
@@ -220,13 +275,14 @@ def load_model(checkpoint_file):
 
 
 def build_optim(args, params):
-    optimizer = torch.optim.Adam(params, args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.RMSprop(params, args.lr, weight_decay=args.weight_decay)
     return optimizer
 
 
 def main(args):
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(log_dir=str(args.exp_dir / 'summary'))
+    wandb.init(name=args.run_name, config=args, project="fastmri-unet")
 
     if args.resume:
         checkpoint, model, optimizer = load_model(args.checkpoint)
@@ -265,14 +321,13 @@ def main(args):
 
 def create_arg_parser():
     parser = ArgumentParser(add_help=False)
-    parser.add_argument('--num-chans', type=int, default=64, help='Number of U-Net channels')
-    parser.add_argument('--mag-only', action='store_true', help='denoise mag only')
-    parser.add_argument('--std-normalize', action='store_true', help='normalize with std instead of maximum')
-    parser.add_argument('--std', type=float, default=5.0 / 255, help='standard dev of denoiser')
+    parser.add_argument('--num-pools', type=int, default=4, help='Number of U-Net pooling layers')
+    parser.add_argument('--drop-prob', type=float, default=0.0, help='Dropout probability')
+    parser.add_argument('--num-chans', type=int, default=128, help='Number of U-Net channels')
 
     parser.add_argument('--batch-size', default=16, type=int, help='Mini batch size')
-    parser.add_argument('--num-epochs', type=int, default=400, help='Number of training epochs')
-    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
+    parser.add_argument('--num-epochs', type=int, default=50, help='Number of training epochs')
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--lr-step-size', type=int, default=40,
                         help='Period of learning rate decay')
     parser.add_argument('--lr-gamma', type=float, default=0.1,
@@ -283,7 +338,7 @@ def create_arg_parser():
     parser.add_argument('--report-interval', type=int, default=100, help='Period of loss reporting')
     parser.add_argument('--data-parallel', action='store_true',
                         help='If set, use multiple GPUs using data parallelism')
-    parser.add_argument('--device', type=str, default='cuda',
+    parser.add_argument('--device', type=int, default=0,
                         help='Which device to train on. Set to "cuda" to use the GPU')
     parser.add_argument('--exp-dir', type=pathlib.Path, default='checkpoints',
                         help='Path where model and results should be saved')
@@ -292,11 +347,28 @@ def create_arg_parser():
                              '"--checkpoint" should be set with this')
     parser.add_argument('--checkpoint', type=str,
                         help='Path to an existing checkpoint. Used along with "--resume"')
+    parser.add_argument('--use-middle-slices', action='store_true',
+                        help='If set, only uses central slice of every data collection')
+    parser.add_argument("--scanner-strength", type=float, default=None,
+                        help="Leave as None for all, >2.2 for 3, > 2.2 for 1.5")
+    parser.add_argument("--scanner-mode", type=str, default=None,
+                        help="Leave as None for all, other options are PD, PDFS")
+    parser.add_argument('--snr', type=float, default=None, help='measurement noise')
+    parser.add_argument('--run-name', type=str, default=None, help='wandb name of run')
+    parser.add_argument('--mask-path', type=str, default=None, help='Path to mask (saved as Tensor)')
     return parser
 
 
 if __name__ == '__main__':
     args = create_arg_parser().parse_args()
+    # restrict visible cuda devices
+    if args.data_parallel or (args.device >= 0):
+        if not args.data_parallel:
+            os.environ['CUDA_VISIBLE_DEVICES'] = str(args.device)
+        args.device = torch.device('cuda')
+    else:
+        args.device = torch.device('cpu')
+    print(args.device)
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
