@@ -27,6 +27,8 @@ import random
 
 from utils.fastmri.utils import generate_gro_mask
 
+count_num = 0
+
 def get_gro_mask(mask_shape):
     #Get Saved CSV Mask
     mask = generate_gro_mask(mask_shape[-2])
@@ -137,6 +139,8 @@ def run_cs(args):
     if args.num_procs == 0:
         start_time = time.perf_counter()
         outputs = []
+        num_slices = len(dataset)
+        print(f'RUNNING MODEL ON {num_slices} SLICES')
         for i in range(len(dataset)):
             outputs.append(run_model(i))
         time_taken = time.perf_counter() - start_time
@@ -145,6 +149,7 @@ def run_cs(args):
             start_time = time.perf_counter()
             outputs = pool.map(run_model, range(len(dataset)))
             time_taken = time.perf_counter() - start_time
+            print('DONE - WITH')
 
     print(f"Run Time = {time_taken} s")
     save_outputs(outputs, args.output_path)
@@ -185,31 +190,30 @@ def create_arg_parser():
 
     return parser
 
-parser = create_arg_parser()
-parser.add_argument('--output_path', type=pathlib.Path, default=pathlib.Path('out'),
-                    help='Path to save the reconstructions to')
-parser.add_argument('--num-iters', type=int, default=200,
-                    help='Number of iterations to run the reconstruction algorithm')
-parser.add_argument('--reg-wt', type=float, default=1e-10,
-                    help='Regularization weight parameter')
-parser.add_argument('--num-procs', type=int, default=18,
-                    help='Number of processes. Set to 0 to disable multiprocessing.')
-parser.add_argument('--device', type=int, default=0,
-                    help='Cuda device idx (-1 for CPU)')
-parser.add_argument('--seed', default=42, type=int, help='Seed for random number generators')
-args = parser.parse_args()
-
-random.seed(args.seed)
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-
-dev_mask = MaskFunc(args.center_fractions, args.accelerations)
-dataset = SliceDataset(
-    root=args.data_path / f'singlecoil_val',
-    transform=DataTransform(dev_mask),
-    challenge='singlecoil',
-    sample_rate=args.sample_rate
-)
-
 if __name__ == "__main__":
+    parser = create_arg_parser()
+    parser.add_argument('--output_path', type=pathlib.Path, default=pathlib.Path('out'),
+	                help='Path to save the reconstructions to')
+    parser.add_argument('--num-iters', type=int, default=200,
+	                help='Number of iterations to run the reconstruction algorithm')
+    parser.add_argument('--reg-wt', type=float, default=1e-10,
+	                help='Regularization weight parameter')
+    parser.add_argument('--num-procs', type=int, default=0,
+	                help='Number of processes. Set to 0 to disable multiprocessing.')
+    parser.add_argument('--device', type=int, default=0,
+	                help='Cuda device idx (-1 for CPU)')
+    parser.add_argument('--seed', default=42, type=int, help='Seed for random number generators')
+    args = parser.parse_args()
+
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+
+    dev_mask = MaskFunc(args.center_fractions, args.accelerations)
+    dataset = SliceDataset(
+	root=args.data_path / f'singlecoil_val',
+	transform=DataTransform(dev_mask),
+	challenge='singlecoil',
+	sample_rate=args.sample_rate
+    )
     run_cs(args)
