@@ -24,14 +24,11 @@ def get_gro_mask(mask_shape):
 def load_a(path, num):
         data = []
         usamp_data = []
-        total=0
         for fname in tqdm(list(path.glob("*.h5"))):
-            total = total + 1
-            print(f"Total Files Processed: {total}")
             with h5py.File(fname, "r") as hf:
                 kspace = transforms.to_tensor(hf['kspace'][()])
                 mask = get_gro_mask(kspace.shape)
-                usamp_kspace = kspace * mask + 0.0
+                usamp_kspace = (kspace * mask) + 0.0
 
                 image = fastmri.ifft2c(kspace)
                 usamp_image = fastmri.ifft2c(usamp_kspace)
@@ -47,7 +44,7 @@ def load_a(path, num):
 
         return np.asarray(data), np.asarray(usamp_data)
 
-data = Path('/storage/fastMRI/data/singlecoil_train')
+data = Path('/storage/fastMRI/data/Matt_preprocessed_data/singlecoil_train')
 train_gt, train_us = load_a(data,0)
 
 #data = Path('/storage/fastMRI_brain/data/multicoil_val')
