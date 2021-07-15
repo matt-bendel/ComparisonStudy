@@ -194,7 +194,7 @@ if __name__ == "__main__":
     parser = create_arg_parser()
     parser.add_argument('--output_path', type=pathlib.Path, default=pathlib.Path('out'),
 	                help='Path to save the reconstructions to')
-    parser.add_argument('--num-iters', type=int, default=200,
+    parser.add_argument('--num-iters', type=int, default=250,
 	                help='Number of iterations to run the reconstruction algorithm')
     parser.add_argument('--reg-wt', type=float, default=1e-10,
 	                help='Regularization weight parameter')

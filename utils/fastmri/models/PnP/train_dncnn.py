@@ -32,21 +32,19 @@ class DataTransform:
     Data Transformer for training U-Net models.
     """
 
-    def __init__(self, noise_std, resolution, mag_only=False, std_normalize=False, use_seed=True):
+    def __init__(self, noise_std, mag_only=False, std_normalize=False, use_seed=True):
         # self.mask_func = mask_func
-        self.resolution = resolution
         # self.which_challenge = which_challenge
         self.use_seed = use_seed
         self.mag_only = mag_only
         self.std_normalize = std_normalize
         self.noise_std = noise_std
 
-    def __call__(self, kspace, target, attrs, fname, slice):
+    def __call__(self, kspace, mask, target, attrs, fname, slice):
         kspace = transforms.to_tensor(kspace)
         # Inverse Fourier Transform to get image
         image = fastmri.ifft2c(kspace)
-        # Crop input image
-        image = transforms.complex_center_crop(image, (self.resolution, self.resolution))
+
         # Absolute value
         if self.mag_only:
             image = fastmri.complex_abs(image).unsqueeze(2)
@@ -66,17 +64,17 @@ class DataTransform:
 
 def create_datasets(args):
     train_data = SliceDataset(
-        root=args.data_path / f'{args.challenge}_train',
-        transform=DataTransform(args.std, args.resolution, mag_only=args.mag_only, std_normalize=args.std_normalize),
-        sample_rate=args.sample_rate,
-        challenge=args.challenge
+        root=args.data_path / f'singlecoil_train',
+        transform=DataTransform(args.std, mag_only=args.mag_only, std_normalize=args.std_normalize),
+        sample_rate=1.0,
+        challenge='singlecoil',
     )
     dev_data = SliceDataset(
-        root=args.data_path / f'{args.challenge}_val',
-        transform=DataTransform(args.std, args.resolution, mag_only=args.mag_only, std_normalize=args.std_normalize,
+        root=args.data_path / f'singlecoil_val',
+        transform=DataTransform(args.std, mag_only=args.mag_only, std_normalize=args.std_normalize,
                                 use_seed=True),
-        sample_rate=args.sample_rate,
-        challenge=args.challenge,
+        sample_rate=1.0,
+        challenge='singlecoil',
     )
     return dev_data, train_data
 
@@ -265,6 +263,12 @@ def main(args):
 
 def create_arg_parser():
     parser = ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--data_path",
+        type=pathlib.Path,
+        required=True,
+        help="Path to the data",
+    )
     parser.add_argument('--num-chans', type=int, default=64, help='Number of U-Net channels')
     parser.add_argument('--mag-only', action='store_true', help='denoise mag only')
     parser.add_argument('--std-normalize', action='store_true', help='normalize with std instead of maximum')
@@ -272,7 +276,7 @@ def create_arg_parser():
 
     parser.add_argument('--batch-size', default=16, type=int, help='Mini batch size')
     parser.add_argument('--num-epochs', type=int, default=400, help='Number of training epochs')
-    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
+    parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--lr-step-size', type=int, default=40,
                         help='Period of learning rate decay')
     parser.add_argument('--lr-gamma', type=float, default=0.1,
@@ -297,7 +301,7 @@ def create_arg_parser():
 
 if __name__ == '__main__':
     args = create_arg_parser().parse_args()
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+#    random.seed(args.seed)
+#    np.random.seed(args.seed)
+#    torch.manual_seed(args.seed)
     main(args)

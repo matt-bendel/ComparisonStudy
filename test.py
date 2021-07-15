@@ -24,15 +24,24 @@ def get_gro_mask(mask_shape):
     return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
 def general():
-    slice = 10
-    with h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/preprocessed/singlecoil_val/file_brain_AXFLAIR_200_6002581.h5', "r") as target, \
-            h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/base_cs/out/file_brain_AXFLAIR_200_6002581.h5', 'r') as recons, \
-                h5py.File('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/zero_filled/out/file_brain_AXFLAIR_200_6002581.h5') as zf:
-        ind = 4
+    with h5py.File('/storage/fastMRI_brain/data/Matt_preprocessed_data/singlecoil_val/file_brain_AXFLAIR_200_6002581.h5', "r") as target, \
+            h5py.File('/home/bendel.8/Git_Repos/ComparisonStudy/base_cs/out/file_brain_AXFLAIR_200_6002581.h5', 'r') as recons, \
+                h5py.File('/home/bendel.8/Git_Repos/ComparisonStudy/zero_filled/out/file_brain_AXFLAIR_200_6002581.h5') as zf:
+        ind = 8
+        need_cropped = False
+        crop_size = (320, 320)
         target = target['reconstruction_rss'][()][ind]
-        target = transforms.center_crop(target, (320, 320))
+        if target.shape[-1] < 320 or target.shape[-2] < 320:
+            need_cropped = True
+            crop_size = (target.shape[-1], target.shape[-1]) if target.shape[-1] < target.shape[-2] else (target.shape[-2], target.shape[-2])
+
+        target = transforms.center_crop(target, crop_size)
         zfr = zf["reconstruction"][()][ind]
         recons = recons["reconstruction"][()][ind]
+        if need_cropped:
+            zfr = transforms.center_crop(zfr, crop_size)
+            recons = transforms.center_crop(recons, crop_size)
+
 
         fig = plt.figure()
         ax1 = fig.add_subplot(1, 3, 1)
@@ -47,9 +56,6 @@ def general():
         # ax3 = fig.add_subplot(1, 3, 3)
         # ax3.imshow(np.abs(usamp_image.numpy()), cmap='gray')
         # plt.xlabel('ZFR')
-        plt.show()
-
-data_path = Path(f'/storage/fastMRI_brain/data/multicoil_train')
-out_path = Path(f'/storage/fastMRI_brain/data/singlecoil_train')
+        plt.savefig('test_graph.png')
 
 general()

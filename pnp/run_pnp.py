@@ -10,6 +10,7 @@ import pathlib
 import random
 import time
 from collections import defaultdict
+import pickle
 
 import numpy as np
 import torch
@@ -36,6 +37,15 @@ from utils.fastmri.models.PnP.train_dncnn import load_model
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def get_gro_mask(mask_shape):
+    #Get Saved CSV Mask
+    mask = generate_gro_mask(mask_shape[-2])
+    shape = np.array(mask_shape)
+    shape[:-3] = 1
+    num_cols = mask_shape[-2]
+    mask_shape = [1 for _ in shape]
+    mask_shape[-2] = num_cols
+    return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
 class DataTransform:
     """
@@ -66,9 +76,8 @@ class DataTransform:
                 slice (int): The index of the current slice in the volume
         """
         kspace = transforms.to_tensor(kspace)
-        seed = tuple(map(ord, fname))
-        # Apply mask to raw k-space
-        masked_kspace, mask = transforms.apply_mask(kspace, self.mask_func, seed)
+        mask = get_gro_mask(kspace.shape)
+        masked_kspace = (kspace * mask) + 0.0
         return masked_kspace, mask, target, fname, slice
 
 
@@ -166,11 +175,7 @@ def cs_pnp(args, model, kspace, mask):
 
     # Estimate sensitivity maps
     # sens_maps = bart.bart(1, f'ecalib -d0 -m1', kspace)
-    if args.challenge == 'singlecoil':
-        sens_maps = np.ones(kspace_np.shape)
-        sens_maps = sens_maps + 1j * 0
-    else:
-        sens_maps = mr.app.EspiritCalib(kspace_np, device=device).run()
+    sens_maps = mr.app.EspiritCalib(kspace_np, device=device).run()
 
     # handle pytorch device
     device = torch.device("cuda:{0:d}".format(args.device) if torch.cuda.is_available() else "cpu")
@@ -222,16 +227,19 @@ def main(args):
         test_array = [20]
     else:
         test_array = range(len(data))
-
+    
+    slize_time = 0
     for i in test_array:
         print('Test ' + str(i) + ' of ' + str(len(test_array)), end='\r')
         masked_kspace, mask, target, fname, slice = data[i]
+        slice_time = time.perf_counter()
         prediction = cs_pnp(args, model, masked_kspace, mask)
+        slice_time = time.perf_counter() - slice_time
         if args.debug:
             display = np.concatenate([prediction, target], axis=1)
             print('NMSE = ' + str(nmse(target, prediction)))
             pl.ImagePlot(display)
-        outputs.append([fname, slice, prediction])
+        outputs.append([fname, slice, prediction, slice_time])
     time_taken = time.perf_counter() - start_time
     logging.info(f'Run Time = {time_taken:}s')
     save_outputs(outputs, args.output_path)
@@ -239,20 +247,27 @@ def main(args):
 
 def save_outputs(outputs, output_path):
     reconstructions = defaultdict(list)
-    for fname, slice, pred in outputs:
+    times = defaultdict(list)
+
+    for fname, slice, pred, recon_time in outputs:
         reconstructions[fname].append((slice, pred))
+        times[fname].append((slice, recon_time))
+
     reconstructions = {
         fname: np.stack([pred for _, pred in sorted(slice_preds)])
         for fname, slice_preds in reconstructions.items()
     }
+
     utils.save_reconstructions(reconstructions, output_path)
+    with open('out/pnp_times.pkl', 'wb') as f:
+        pickle.dump(times, f)
 
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
-    parser.add_argument('--output-path', type=pathlib.Path, default=None,
+    parser.add_argument('--output-path', type=pathlib.Path, default=pathlib.Path(out),
                         help='Path to save the reconstructions to')
-    parser.add_argument('--algorithm', type=str, default='pnp-pg',
+    parser.add_argument('--algorithm', type=str, default='red-gd',
                         help='Algorithm used (pnp-pg, pnp-admm, red-admm, red-gd)')
     parser.add_argument('--num-iters', type=int, default=200,
                         help='Number of iterations to run the reconstruction algorithm')
@@ -260,9 +275,9 @@ if __name__ == '__main__':
                         help='Step size parameter')
     parser.add_argument('--lamda', type=float, default=0.01, help='Regularization weight parameter')
     parser.add_argument('--beta', type=float, default=0.001, help='ADMM Penalty parameter')
-    parser.add_argument('--device', type=int, default=0, help='Cuda device (-1 for CPU)')
+    parser.add_argument('--device', type=int, default=-1, help='Cuda device (-1 for CPU)')
     # parser.add_argument('--denoiser-mode', type=str, default='mag', help='Denoiser mode (mag, real_imag)')
-    parser.add_argument('--checkpoint', type=str, default='models/PnP/saved_models/dncnn_5/best_model.pt',
+    parser.add_argument('--checkpoint', type=str, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/checkpoints/best_model.pt',
                         help='Path to an existing checkpoint.')
     parser.add_argument("--mag-only", default=False, action="store_true", help="Magnitude only denoising")
     parser.add_argument("--debug", default=False, action="store_true", help="Debug mode")
