@@ -11,6 +11,7 @@ import random
 import time
 from collections import defaultdict
 import pickle
+import cupy as cp
 
 import numpy as np
 import torch
@@ -23,9 +24,9 @@ import sigpy as sp
 import sigpy.mri as mr
 import sigpy.plot as pl
 
+from utils import fastmri
 from utils.fastmri import utils
 from argparse import ArgumentParser
-from utils.fastmri.data.subsample import MaskFunc
 from utils.fastmri import tensor_to_complex_np
 from utils.fastmri.evaluate import nmse
 from utils.fastmri.data import transforms
@@ -33,6 +34,8 @@ from utils.fastmri.data.mri_data import SliceDataset
 
 from utils.fastmri.models.PnP.dncnn import DnCNN
 from utils.fastmri.models.PnP.train_dncnn import load_model
+
+from utils.fastmri.utils import generate_gro_mask
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,7 +63,7 @@ class DataTransform:
         """
         self.mask_func = mask_func
 
-    def __call__(self, kspace, target, attrs, fname, slice):
+    def __call__(self, kspace, mk, target, attrs, fname, slice):
         """
         Args:
             kspace (numpy.array): Input k-space of shape (num_coils, rows, cols, 2) for multi-coil
@@ -78,16 +81,16 @@ class DataTransform:
         kspace = transforms.to_tensor(kspace)
         mask = get_gro_mask(kspace.shape)
         masked_kspace = (kspace * mask) + 0.0
-        return masked_kspace, mask, target, fname, slice
+        return masked_kspace, mask, target, attrs, fname, slice
 
 
 def create_data_loader(args):
-    dev_mask = MaskFunc(args.center_fractions, args.accelerations)
+    dev_mask = None
     data = SliceDataset(
-        root=args.data_path / f'{args.challenge}_val',
+        root=args.data_path / f'singlecoil_val',
         transform=DataTransform(dev_mask),
-        challenge=args.challenge,
-        sample_rate=args.sample_rate
+        challenge='singlecoil',
+        sample_rate=1.0
     )
     return data
 
@@ -140,15 +143,15 @@ class A_mri:
         self.mask = mask.unsqueeze(3)
 
     def A(self, x):
-        y = transforms.complex_mult(x, self.sens_maps)
-        y_fft = transforms.fft2(y)
+        y = fastmri.complex_mul(x, self.sens_maps)
+        y_fft = fastmri.fft2c(y)
         out = self.mask * y_fft
         return out
 
     def H(self, x):
         y = self.mask * x
-        y_ifft = transforms.ifft2(y)
-        out = torch.sum(transforms.complex_mult(y_ifft, transforms.complex_conj(self.sens_maps)), dim=0)
+        y_ifft = fastmri.ifft2c(y)
+        out = torch.sum(fastmri.complex_mul(y_ifft, fastmri.complex_conj(self.sens_maps)), dim=0)
         return out
 
 
@@ -164,9 +167,8 @@ def cs_pnp(args, model, kspace, mask):
     Run ESPIRIT coil sensitivity estimation and Total Variation Minimization based
     reconstruction algorithm using the BART toolkit.
     """
-
-    if args.challenge == 'singlecoil':
-        kspace = kspace.unsqueeze(0)
+    #SINGLECOIL ONLY
+    kspace = kspace.unsqueeze(0)
     mask = mask.permute(0, 2, 1)
     kspace_np = tensor_to_complex_np(kspace)
     mask = mask.cpu().numpy()
@@ -178,8 +180,9 @@ def cs_pnp(args, model, kspace, mask):
     sens_maps = mr.app.EspiritCalib(kspace_np, device=device).run()
 
     # handle pytorch device
-    device = torch.device("cuda:{0:d}".format(args.device) if torch.cuda.is_available() else "cpu")
-    sens_maps = transforms.to_tensor(sens_maps.astype('complex64')).to(device)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cpu")
+    sens_maps = transforms.to_tensor(cp.asnumpy(sens_maps.astype('complex64'))).to(device)
     mask = transforms.to_tensor(mask).to(device)
 
     mri = A_mri(sens_maps, mask)
@@ -192,10 +195,11 @@ def cs_pnp(args, model, kspace, mask):
 
     elif args.algorithm == 'red-gd':
         pred = red_gd(kspace, mri, model, args)
+        print("PRED COMPLETE")
 
-    pred = transforms.complex_abs(pred).cpu().numpy()
+    pred = fastmri.complex_abs(pred).cpu().numpy()
     # Crop the predicted image to the correct size
-    return transforms.center_crop(pred, (args.resolution, args.resolution))
+    return pred
 
 
 # def run_model(i):
@@ -212,7 +216,8 @@ def main(args):
     #     save_outputs(outputs, args.output_path)
 
     # handle pytorch device
-    device = torch.device("cuda:{0:d}".format(args.device) if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    #device = torch.device("cpu")
 
     # load model
     _, model, _ = load_model(args.checkpoint)
@@ -228,13 +233,16 @@ def main(args):
     else:
         test_array = range(len(data))
     
-    slize_time = 0
+    slice_time = 0
+    num = 0
     for i in test_array:
         print('Test ' + str(i) + ' of ' + str(len(test_array)), end='\r')
-        masked_kspace, mask, target, fname, slice = data[i]
+        masked_kspace, mask, target, attr, fname, slice = data[i]
         slice_time = time.perf_counter()
         prediction = cs_pnp(args, model, masked_kspace, mask)
         slice_time = time.perf_counter() - slice_time
+        num = num + 1
+        print(f"{num} COMPLETED")
         if args.debug:
             display = np.concatenate([prediction, target], axis=1)
             print('NMSE = ' + str(nmse(target, prediction)))
@@ -265,7 +273,13 @@ def save_outputs(outputs, output_path):
 
 if __name__ == '__main__':
     parser = ArgumentParser(add_help=False)
-    parser.add_argument('--output-path', type=pathlib.Path, default=pathlib.Path(out),
+    parser.add_argument(
+        "--data_path",
+        type=pathlib.Path,
+        required=True,
+        help="Path to the data",
+    )
+    parser.add_argument('--output-path', type=pathlib.Path, default='out',
                         help='Path to save the reconstructions to')
     parser.add_argument('--algorithm', type=str, default='red-gd',
                         help='Algorithm used (pnp-pg, pnp-admm, red-admm, red-gd)')
@@ -275,17 +289,13 @@ if __name__ == '__main__':
                         help='Step size parameter')
     parser.add_argument('--lamda', type=float, default=0.01, help='Regularization weight parameter')
     parser.add_argument('--beta', type=float, default=0.001, help='ADMM Penalty parameter')
-    parser.add_argument('--device', type=int, default=-1, help='Cuda device (-1 for CPU)')
+    parser.add_argument('--device', type=int, default=0, help='Cuda device (-1 for CPU)')
     # parser.add_argument('--denoiser-mode', type=str, default='mag', help='Denoiser mode (mag, real_imag)')
     parser.add_argument('--checkpoint', type=str, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/checkpoints/best_model.pt',
                         help='Path to an existing checkpoint.')
     parser.add_argument("--mag-only", default=False, action="store_true", help="Magnitude only denoising")
     parser.add_argument("--debug", default=False, action="store_true", help="Debug mode")
     args = parser.parse_args()
-
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
 
     data = create_data_loader(args)
     main(args)

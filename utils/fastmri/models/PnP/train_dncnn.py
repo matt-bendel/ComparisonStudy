@@ -22,7 +22,7 @@ from argparse import ArgumentParser
 from utils import fastmri
 from utils.fastmri.data import transforms
 from utils.fastmri.data.mri_data import SliceDataset
-from dncnn import DnCNN
+from utils.fastmri.models.PnP.dncnn import DnCNN
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
