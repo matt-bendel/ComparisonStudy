@@ -136,6 +136,7 @@ def run_unet(args, model, data_loader):
         if args.debug:
             input, mean, std, fname, slice = data_loader[0:5]  # data_loader is actually a tensor
             input = input.unsqueeze(0).unsqueeze(0).to(args.device)
+            print(input.shape)
             recon = model(input).to('cpu').squeeze()
             recon = recon * std + mean
             recon = recon.cpu().numpy()
