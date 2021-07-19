@@ -24,12 +24,8 @@ from eval import nmse, psnr
 from utils.fastmri.data import transforms
 from utils.fastmri.models.unet.unet import UnetModel
 
-import matplotlib
 
 from utils.fastmri.utils import generate_gro_mask
-
-matplotlib.use('TKAgg')
-import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -153,20 +149,6 @@ def run_unet(args, model, data_loader):
             print(f'NMSE: {NMSE}')
             print(f'PSNR: {PSNR}')
             print(f'rSNR: {rSNR}')
-            display = np.concatenate([display, target], axis=1)
-            title = 'reconstruction + target'
-            # plt.imshow(display, origin='lower', cmap='gray')
-            plt.imshow(recon, origin='lower', cmap='gray')
-            plt.title('u-net reconstruction')
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
-
-            plt.imshow(target, origin='lower', cmap='gray')
-            plt.title('target')
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
 
             return
         for data in data_loader:
@@ -190,8 +172,7 @@ def run_unet(args, model, data_loader):
                 NMSE = nmse(targets[i], recons[i])
                 rSNR = 10 * np.log10(1 / NMSE)
                 PSNR = psnr(targets[i], recons[i])
-                SSIM = compare_ssim(targets[i], recons[i], data_range=targets[i].max())
-                metrics = [NMSE, PSNR, SSIM, rSNR]
+                metrics = [NMSE, PSNR, rSNR]
                 a_metrics.append(metrics)
 
     if args.data_split == 'val':
