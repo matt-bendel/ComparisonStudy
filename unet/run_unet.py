@@ -14,8 +14,9 @@ import pickle
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 
+from utils import fastmri
 from utils.fastmri.data.mri_data import SliceDataset
 from argparse import ArgumentParser
 from utils.fastmri import save_reconstructions
@@ -78,10 +79,10 @@ class DataTransform:
         masked_kspace = (kspace * mask) + 0.0
 
         # Inverse Fourier Transform to get zero filled solution
-        image = transforms.ifft2(masked_kspace)
+        image = fastmri.ifft2c(masked_kspace)
 
         # Absolute value
-        image = transforms.complex_abs(image)
+        image = fastmri.complex_abs(image)
 
         # Normalize input
         image, mean, std = transforms.normalize_instance(image)
@@ -225,13 +226,13 @@ def create_arg_parser():
                         help='Which data partition to run on: "val" or "test"')
     parser.add_argument('--checkpoint', type=pathlib.Path, required=True,
                         help='Path to the U-Net model')
-    parser.add_argument('--out-dir', type=pathlib.Path, default=None,
+    parser.add_argument('--out-dir', type=pathlib.Path, default='out',
                         help='Path to save the reconstructions to')
     parser.add_argument('--batch-size', default=16, type=int, help='Mini-batch size')
     parser.add_argument('--device', type=int, default=0, help='Which cuda device to run on (give idx as int)')
     parser.add_argument('--snr', type=float, default=None, help='measurement noise')
     parser.add_argument("--debug", default=False, action="store_true", help="Debug mode")
-    parser.add_argument("--test-idx", type=int, default=0, help="test index image for debug mode")
+    parser.add_argument("--test-idx", type=int, default=1, help="test index image for debug mode")
     parser.add_argument("--use-mid-slices", default=False, action='store_true', help="use only middle slices")
     parser.add_argument("--scanner-strength", type=float, default=None,
                         help="Leave as None for all, >2.2 for 3, > 2.2 for 1.5")
