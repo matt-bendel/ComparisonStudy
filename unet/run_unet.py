@@ -25,7 +25,6 @@ from eval import nmse, psnr
 from utils.fastmri.data import transforms
 from utils.fastmri.models.unet.unet import UnetModel
 
-
 from utils.fastmri.utils import generate_gro_mask
 
 logging.basicConfig(level=logging.INFO)
@@ -75,6 +74,7 @@ class DataTransform:
                 slice (int): Serial number of the slice
         """
         kspace = transforms.to_tensor(kspace)
+
         mask = get_gro_mask(kspace.shape)
         masked_kspace = (kspace * mask) + 0.0
 
@@ -88,12 +88,12 @@ class DataTransform:
         image, mean, std = transforms.normalize_instance(image)
         image = image.clamp(-6, 6)
 
-        if self.args.data_split == 'val':
-            target = transforms.to_tensor(target)
-            # Normalize target
-            target = transforms.normalize(target, mean, std, eps=1e-11)
-            # target = target.clamp(-6, 6)
-            return image, mean, std, fname, slice, target
+        # if self.args.data_split == 'val':
+        #     target = transforms.to_tensor(target)
+        #     # Normalize target
+        #     target = transforms.normalize(target, mean, std, eps=1e-11)
+        #     target = target.clamp(-6, 6)
+        #     return image, mean, std, fname, slice, target
 
         return image, mean, std, fname, slice
 
