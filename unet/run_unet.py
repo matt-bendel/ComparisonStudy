@@ -229,10 +229,10 @@ def create_arg_parser():
     parser.add_argument('--out-dir', type=pathlib.Path, default='out',
                         help='Path to save the reconstructions to')
     parser.add_argument('--batch-size', default=16, type=int, help='Mini-batch size')
-    parser.add_argument('--device', type=int, default=0, help='Which cuda device to run on (give idx as int)')
+    parser.add_argument('--device', type=int, default=1, help='Which cuda device to run on (give idx as int)')
     parser.add_argument('--snr', type=float, default=None, help='measurement noise')
     parser.add_argument("--debug", default=False, action="store_true", help="Debug mode")
-    parser.add_argument("--test-idx", type=int, default=1, help="test index image for debug mode")
+    parser.add_argument("--test-idx", type=int, default=0, help="test index image for debug mode")
     parser.add_argument("--use-mid-slices", default=False, action='store_true', help="use only middle slices")
     parser.add_argument("--scanner-strength", type=float, default=None,
                         help="Leave as None for all, >2.2 for 3, > 2.2 for 1.5")
