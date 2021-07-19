@@ -245,7 +245,7 @@ class SliceDataset(torch.utils.data.Dataset):
 
         self.transform = transform
         self.recons_key = (
-            "reconstruction_esc" if challenge == "singlecoil" else "reconstruction_rss"
+            "reconstruction_rss" if challenge == "singlecoil" else "reconstruction_rss"
         )
         self.examples = []
 

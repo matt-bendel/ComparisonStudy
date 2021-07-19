@@ -26,8 +26,9 @@ def get_gro_mask(mask_shape):
 def general():
     with h5py.File('/storage/fastMRI_brain/data/Matt_preprocessed_data/singlecoil_val/file_brain_AXFLAIR_200_6002581.h5', "r") as target, \
             h5py.File('/home/bendel.8/Git_Repos/ComparisonStudy/base_cs/out/file_brain_AXFLAIR_200_6002581.h5', 'r') as recons, \
-                h5py.File('/home/bendel.8/Git_Repos/ComparisonStudy/zero_filled/out/file_brain_AXFLAIR_200_6002581.h5') as zf:
-        ind = 8
+                h5py.File('/home/bendel.8/Git_Repos/ComparisonStudy/zero_filled/out/file_brain_AXFLAIR_200_6002581.h5') as zf, \
+                    h5py.File('/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/file_brain_AXFLAIR_200_6002581.h5') as pnp_im:
+        ind = 10
         need_cropped = False
         crop_size = (320, 320)
         target = target['reconstruction_rss'][()][ind]
@@ -38,24 +39,27 @@ def general():
         target = transforms.center_crop(target, crop_size)
         zfr = zf["reconstruction"][()][ind]
         recons = recons["reconstruction"][()][ind]
+        pnp_im = pnp_im["reconstruction"][()][ind]
+
         if need_cropped:
             zfr = transforms.center_crop(zfr, crop_size)
             recons = transforms.center_crop(recons, crop_size)
+            pnp_im = transforms.center_crop(pnp_im, crop_size)
 
 
         fig = plt.figure()
-        ax1 = fig.add_subplot(1, 3, 1)
+        ax1 = fig.add_subplot(1, 4, 1)
         ax1.imshow(np.abs(target), cmap='gray')
         plt.xlabel('GT')
-        ax1 = fig.add_subplot(1, 3, 2)
-        ax1.imshow(np.abs(zfr), cmap='gray')
+        ax2 = fig.add_subplot(1, 4, 2)
+        ax2.imshow(np.abs(zfr), cmap='gray')
         plt.xlabel('ZFR')
-        ax2 = fig.add_subplot(1,3,3)
-        ax2.imshow(np.abs(recons), cmap='gray')
+        ax3 = fig.add_subplot(1,4,3)
+        ax3.imshow(np.abs(recons), cmap='gray')
         plt.xlabel('CS-TV')
-        # ax3 = fig.add_subplot(1, 3, 3)
-        # ax3.imshow(np.abs(usamp_image.numpy()), cmap='gray')
-        # plt.xlabel('ZFR')
+        ax4 = fig.add_subplot(1, 4, 4)
+        ax4.imshow(np.abs(pnp_im), cmap='gray')
+        plt.xlabel('PnP (RED-GD)')
         plt.savefig('test_graph.png')
 
 general()

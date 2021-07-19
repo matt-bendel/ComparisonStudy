@@ -23,8 +23,8 @@ from eval import nmse
 from utils import fastmri
 from utils.fastmri.data import transforms
 from utils.fastmri.data.mri_data import SelectiveSliceData
+from utils.fastmri.data.mri_data import SliceDataset
 from utils.fastmri.models.unet.unet import UnetModel
-import wandb
 
 from utils.fastmri.utils import generate_gro_mask
 
@@ -52,10 +52,9 @@ class DataTransform:
         self.mask = None
         if args.mask_path is not None:
             self.mask = torch.load(args.mask_path)
-            if args.challenge == 'singlecoil':
-                self.mask = self.mask.squeeze(0)
+            self.mask = self.mask.squeeze(0)
 
-    def __call__(self, kspace, target, attrs, fname, slice):
+    def __call__(self, kspace, mk, target, attrs, fname, slice):
         """
         Args:
             kspace (numpy.array): Input k-space of shape (num_coils, rows, cols, 2) for multi-coil
@@ -80,8 +79,6 @@ class DataTransform:
 
         # Inverse Fourier Transform to get zero filled solution
         image = fastmri.ifft2c(masked_kspace)
-        # Crop input image
-        image = transforms.complex_center_crop(image, (args.resolution, args.resolution))
         # Absolute value
         image = fastmri.complex_abs(image)
 
@@ -90,50 +87,33 @@ class DataTransform:
         image = image.clamp(-6, 6)
 
         # Normalize target
-        target = transforms.to_tensor(target)
+        target = fastmri.ifft2c(kspace)
+        target = transforms.complex_center_crop(target, (320,320))
+        target = fastmri.complex_abs(target)
+        
         target = transforms.normalize(target, mean, std, eps=1e-11)
         target = target.clamp(-6, 6)
         return image, target, mean, std, attrs['norm'].astype(np.float32)
 
 
 def create_datasets(args):
-    # select subset
-    fat_supress = None
-    strength_3T = None
-
-    if args.scanner_mode is not None:
-        fat_supress = (args.scanner_mode == "PDFS")
-    if args.scanner_strength is not None:
-        strength_3T = (args.scanner_strength >= 2.2)
-
-
-    train_data = SelectiveSliceData(
-        root=args.data_path / f'{args.challenge}_train',
+    train_data = SliceDataset(
+        root=args.data_path / f'singlecoil_train',
         transform=DataTransform(args),
-        sample_rate=args.sample_rate,
-        challenge=args.challenge,
-        use_mid_slices=args.use_middle_slices,
-        fat_supress=fat_supress,
-        strength_3T=strength_3T,
-        restrict_size=True
+        sample_rate=1.0,
+        challenge='singlecoil',
     )
-    dev_data = SelectiveSliceData(
-        root=args.data_path / f'{args.challenge}_val',
-        transform=DataTransform(args, use_seed=True),
-        sample_rate=args.sample_rate,
-        challenge=args.challenge,
-        use_mid_slices=args.use_middle_slices,
-        fat_supress=fat_supress,
-        strength_3T=strength_3T,
-        restrict_size=True
+    dev_data = SliceDataset(
+        root=args.data_path / f'singlecoil_val',
+        transform=DataTransform(args),
+        sample_rate=1.0,
+        challenge='singlecoil',
     )
     return dev_data, train_data
 
 
 def create_data_loaders(args):
     dev_data, train_data = create_datasets(args)
-    display_data = [dev_data[i] for i in range(0, len(dev_data), len(dev_data) // 16)]
-
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
@@ -147,13 +127,8 @@ def create_data_loaders(args):
         num_workers=64,
         pin_memory=True,
     )
-    display_loader = DataLoader(
-        dataset=display_data,
-        batch_size=16,
-        num_workers=64,
-        pin_memory=True,
-    )
-    return train_loader, dev_loader, display_loader
+
+    return train_loader, dev_loader
 
 
 def train_epoch(args, epoch, model, data_loader, optimizer, writer):
@@ -208,7 +183,6 @@ def evaluate(args, epoch, model, data_loader, writer):
                 NMSE = nmse(target[i].cpu().numpy(), output[i].cpu().numpy())
                 losses.append(NMSE)
         writer.add_scalar('Dev_Loss', np.mean(losses), epoch)
-        wandb.log({"Val_NMSE": np.mean(losses)}, step=epoch)
     return np.mean(losses), time.perf_counter() - start
 
 
@@ -219,7 +193,6 @@ def visualize(args, epoch, model, data_loader, writer):
         grid = torchvision.utils.make_grid(image, nrow=4, pad_value=1)
         writer.add_image(tag, grid, epoch)
         grid_np = np.transpose(grid.cpu().numpy(), (1, 2, 0))
-        wandb.log({tag: wandb.Image(grid_np)}, step=epoch)
 
     model.eval()
     with torch.no_grad():
@@ -282,7 +255,6 @@ def build_optim(args, params):
 def main(args):
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(log_dir=str(args.exp_dir / 'summary'))
-    wandb.init(name=args.run_name, config=args, project="fastmri-unet")
 
     if args.resume:
         checkpoint, model, optimizer = load_model(args.checkpoint)
@@ -300,14 +272,13 @@ def main(args):
     logging.info(args)
     logging.info(model)
 
-    train_loader, dev_loader, display_loader = create_data_loaders(args)
+    train_loader, dev_loader = create_data_loaders(args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_step_size, args.lr_gamma)
 
     for epoch in range(start_epoch, args.num_epochs):
         scheduler.step(epoch)
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, writer)
         dev_loss, dev_time = evaluate(args, epoch, model, dev_loader, writer)
-        visualize(args, epoch, model, display_loader, writer)
 
         is_new_best = dev_loss < best_dev_loss
         best_dev_loss = min(best_dev_loss, dev_loss)
@@ -321,6 +292,12 @@ def main(args):
 
 def create_arg_parser():
     parser = ArgumentParser(add_help=False)
+    parser.add_argument(
+        "--data_path",
+        type=pathlib.Path,
+        required=True,
+        help="Path to the data",
+    )
     parser.add_argument('--num-pools', type=int, default=4, help='Number of U-Net pooling layers')
     parser.add_argument('--drop-prob', type=float, default=0.0, help='Dropout probability')
     parser.add_argument('--num-chans', type=int, default=128, help='Number of U-Net channels')
@@ -338,7 +315,7 @@ def create_arg_parser():
     parser.add_argument('--report-interval', type=int, default=100, help='Period of loss reporting')
     parser.add_argument('--data-parallel', action='store_true',
                         help='If set, use multiple GPUs using data parallelism')
-    parser.add_argument('--device', type=int, default=0,
+    parser.add_argument('--device', type=str, default='cuda',
                         help='Which device to train on. Set to "cuda" to use the GPU')
     parser.add_argument('--exp-dir', type=pathlib.Path, default='checkpoints',
                         help='Path where model and results should be saved')
@@ -369,7 +346,5 @@ if __name__ == '__main__':
     else:
         args.device = torch.device('cpu')
     print(args.device)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+
     main(args)
