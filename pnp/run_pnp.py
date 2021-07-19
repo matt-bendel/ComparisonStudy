@@ -283,9 +283,9 @@ if __name__ == '__main__':
                         help='Path to save the reconstructions to')
     parser.add_argument('--algorithm', type=str, default='red-gd',
                         help='Algorithm used (pnp-pg, pnp-admm, red-admm, red-gd)')
-    parser.add_argument('--num-iters', type=int, default=200,
+    parser.add_argument('--num-iters', type=int, default=100,
                         help='Number of iterations to run the reconstruction algorithm')
-    parser.add_argument('--step-size', type=float, default=0.01,
+    parser.add_argument('--step-size', type=float, default=0.001,
                         help='Step size parameter')
     parser.add_argument('--lamda', type=float, default=0.01, help='Regularization weight parameter')
     parser.add_argument('--beta', type=float, default=0.001, help='ADMM Penalty parameter')
