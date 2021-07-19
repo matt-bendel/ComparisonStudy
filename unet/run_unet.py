@@ -109,7 +109,7 @@ def create_data_loaders(args):
     data_loader = DataLoader(
         dataset=data,
         batch_size=args.batch_size,
-        num_workers=64,
+        num_workers=24,
         pin_memory=True,
     )
     return data_loader
@@ -154,7 +154,6 @@ def run_unet(args, model, data_loader):
             return
         for data in data_loader:
             input, mean, std, fnames, slices = data[0:5]
-            print(input.shape)
             input = input.unsqueeze(1).to(args.device)
             start_time = time.perf_counter()
             recons = model(input).to('cpu').squeeze(1)
