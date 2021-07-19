@@ -57,7 +57,7 @@ class DataTransform:
         self.args = args
         self.mask = None
 
-    def __call__(self, kspace, target, attrs, fname, slice):
+    def __call__(self, kspace, mk, target, attrs, fname, slice):
         """
         Args:
             kspace (numpy.Array): k-space measurements
