@@ -14,7 +14,7 @@ def test(in_path):
         with h5py.File(fname, "r") as hf:
             kspace = transforms.to_tensor(hf['kspace'][()])
             image = fastmri.ifft2c(kspace)
-            print(image.shape)
+            print(f'{fname.name}: {image.shape}')
 
 
 data_path = Path('/storage/fastMRI_brain/data/matt_preprocessed_data/singlecoil_val')
