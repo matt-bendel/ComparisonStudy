@@ -88,12 +88,12 @@ class DataTransform:
         image, mean, std = transforms.normalize_instance(image)
         image = image.clamp(-6, 6)
 
-        # if self.args.data_split == 'val':
-        #     target = transforms.to_tensor(target)
-        #     # Normalize target
-        #     target = transforms.normalize(target, mean, std, eps=1e-11)
-        #     target = target.clamp(-6, 6)
-        #     return image, mean, std, fname, slice, target
+        if self.args.data_split == 'val':
+            target = transforms.to_tensor(target)
+            # Normalize target
+            target = transforms.normalize(target, mean, std, eps=1e-11)
+            target = target.clamp(-6, 6)
+            return image, mean, std, fname, slice, target
 
         return image, mean, std, fname, slice
 
