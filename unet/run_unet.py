@@ -34,6 +34,15 @@ import matplotlib.pyplot as plt
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+def get_gro_mask(mask_shape):
+    #Get Saved CSV Mask
+    mask = generate_gro_mask(mask_shape[-2])
+    shape = np.array(mask_shape)
+    shape[:-3] = 1
+    num_cols = mask_shape[-2]
+    mask_shape = [1 for _ in shape]
+    mask_shape[-2] = num_cols
+    return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
 class DataTransform:
     """
@@ -51,10 +60,6 @@ class DataTransform:
         self.use_seed = use_seed
         self.args = args
         self.mask = None
-        if args.mask_path is not None:
-            self.mask = torch.load(args.mask_path)
-            if args.challenge == 'singlecoil':
-                self.mask = self.mask.squeeze(0)
 
     def __call__(self, kspace, target, attrs, fname, slice):
         """
@@ -73,35 +78,15 @@ class DataTransform:
                 slice (int): Serial number of the slice
         """
         kspace = transforms.to_tensor(kspace)
-
-        # Apply mask
-        seed = None if not self.use_seed else tuple(map(ord, fname))
-        if self.mask is None:
-            masked_kspace, mask = transforms.apply_mask(kspace,
-                                                        MaskFunc(self.args.center_fractions, self.args.accelerations),
-                                                        seed=seed)
-        else:
-            masked_kspace, mask = kspace * self.mask, self.mask
-
-        if args.snr is not None:
-            sig_power = torch.sum(masked_kspace ** 2)
-            snr_ratio = 10 ** (args.snr / 10)
-            noise_power = sig_power / snr_ratio
-            m = kspace.size(0) * torch.sum(mask) * kspace.size(2)
-            noise_std = torch.sqrt(noise_power / m)
-            noise = mask * (noise_std * torch.randn(kspace.size()))
-            # noise_power_test = torch.sum(noise**2)
-            masked_kspace = masked_kspace + noise
+        mask = get_gro_mask(kspace.shape)
+        masked_kspace = (kspace * mask) + 0.0
 
         # Inverse Fourier Transform to get zero filled solution
         image = transforms.ifft2(masked_kspace)
-        # Crop input image
-        image = transforms.complex_center_crop(image, (self.args.resolution, self.args.resolution))
+
         # Absolute value
         image = transforms.complex_abs(image)
-        # Apply Root-Sum-of-Squares if multicoil data
-        if self.args.challenge == 'multicoil':
-            image = transforms.root_sum_of_squares(image)
+
         # Normalize input
         image, mean, std = transforms.normalize_instance(image)
         image = image.clamp(-6, 6)
@@ -248,6 +233,12 @@ def main(args):
 
 def create_arg_parser():
     parser = Args()
+    parser.add_argument(
+        "--data_path",
+        type=pathlib.Path,
+        required=True,
+        help="Path to the data",
+    )
     # parser.add_argument('--mask-kspace', action='store_true',
     #                     help='Whether to apply a mask (set to True for val data and False '
     #                          'for test data')
@@ -268,6 +259,8 @@ def create_arg_parser():
     parser.add_argument("--scanner-mode", type=str, default=None,
                         help="Leave as None for all, other options are PD, PDFS")
     parser.add_argument('--mask-path', type=str, default=None, help='Path to mask (saved as Tensor)')
+    parser.add_argument('--data-parallel', action='store_true',
+                        help='If set, use multiple GPUs using data parallelism')
     return parser
 
 
