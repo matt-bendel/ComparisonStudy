@@ -16,17 +16,17 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
-from common.args import Args
-from common.subsample import MaskFunc
-from common.utils import save_reconstructions
-from common.evaluate import nmse, psnr
-from skimage.measure import compare_ssim
+from utils.fastmri.data.mri_data import SliceDataset
+from argparse import ArgumentParser
+from utils.fastmri import save_reconstructions
+from eval import nmse, psnr
 
-from data import transforms
-from data.mri_data import SelectiveSliceData
-from models.unet.unet_model import UnetModel
+from utils.fastmri.data import transforms
+from utils.fastmri.models.unet.unet import UnetModel
 
 import matplotlib
+
+from utils.fastmri.utils import generate_gro_mask
 
 matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
@@ -133,7 +133,7 @@ def run_unet(args, model, data_loader):
     a_metrics = []
 
     reconstructions = defaultdict(list)
-    time = defaultdict(list)
+    times = defaultdict(list)
 
     with torch.no_grad():
         if args.debug:
@@ -150,10 +150,8 @@ def run_unet(args, model, data_loader):
             NMSE = nmse(target, recon)
             rSNR = 10 * np.log10(1 / NMSE)
             PSNR = psnr(target, recon)
-            SSIM = compare_ssim(target, recon, data_range=target.max())
             print(f'NMSE: {NMSE}')
             print(f'PSNR: {PSNR}')
-            print(f'SSIM: {SSIM}')
             print(f'rSNR: {rSNR}')
             display = np.concatenate([display, target], axis=1)
             title = 'reconstruction + target'
@@ -182,7 +180,7 @@ def run_unet(args, model, data_loader):
             for i in range(recons.shape[0]):
                 recons[i] = recons[i] * std[i] + mean[i]
                 reconstructions[fnames[i]].append((slices[i].numpy(), recons[i].numpy()))
-                time[fnames[i]].append(avg_time)
+                times[fnames[i]].append(avg_time)
                 targets[i] = targets[i] * std[i] + mean[i]
 
             targets = targets.cpu().numpy()
@@ -232,7 +230,7 @@ def main(args):
 
 
 def create_arg_parser():
-    parser = Args()
+    parser = ArgumentParser(add_help=False)
     parser.add_argument(
         "--data_path",
         type=pathlib.Path,

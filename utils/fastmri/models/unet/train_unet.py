@@ -22,7 +22,6 @@ from argparse import ArgumentParser
 from eval import nmse
 from utils import fastmri
 from utils.fastmri.data import transforms
-from utils.fastmri.data.mri_data import SelectiveSliceData
 from utils.fastmri.data.mri_data import SliceDataset
 from utils.fastmri.models.unet.unet import UnetModel
 
