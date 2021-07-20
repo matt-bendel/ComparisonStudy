@@ -88,14 +88,14 @@ class DataTransform:
         image, mean, std = transforms.normalize_instance(image)
         image = image.clamp(-6, 6)
 
-        if self.args.data_split == 'val':
-            target = transforms.to_tensor(target)
-            # Normalize target
-            target = transforms.normalize(target, mean, std, eps=1e-11)
-            target = target.clamp(-6, 6)
-            return image, mean, std, fname, slice, target
+        target = fastmri.ifft2c(kspace)
+        target = transforms.complex_center_crop(target, (320,320))
+        target = fastmri.complex_abs(target)
+        
+        target = transforms.normalize(target, mean, std, eps=1e-11)
+        target = target.clamp(-6, 6)
 
-        return image, mean, std, fname, slice
+        return image, mean, std, fname, slice, target
 
 
 def create_data_loaders(args):
@@ -179,7 +179,7 @@ def run_unet(args, model, data_loader):
     if args.data_split == 'val':
         # Print metrics
         a_metrics = np.array(a_metrics)
-        a_names = ['NMSE', 'PSNR', 'SSIM', 'rSNR']
+        a_names = ['NMSE', 'PSNR', 'rSNR']
         mean_metrics = np.mean(a_metrics, axis=0)
         std_metrics = np.std(a_metrics, axis=0)
         for i in range(len(a_names)):
