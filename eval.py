@@ -5,9 +5,16 @@ from typing import Optional
 
 import h5py
 import numpy as np
+import matplotlib.pyplot as plt
+from utils import fastmri
+from utils.fastmri.data import transforms
 from runstats import Statistics
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 import matplotlib.pyplot as plt
+import pickle
+
+all_psnr = []
+all_ssim = []
 
 def mse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     """Compute Mean Squared Error (MSE)"""
@@ -25,7 +32,9 @@ def psnr(
     """Compute Peak Signal to Noise Ratio metric (PSNR)"""
     if maxval is None:
         maxval = gt.max()
-    return peak_signal_noise_ratio(gt, pred, data_range=maxval)
+    psnr_val = peak_signal_noise_ratio(gt, pred, data_range=maxval)
+    all_psnr.append(psnr_val)
+    return psnr_val
 
 
 def ssim(
@@ -44,8 +53,10 @@ def ssim(
         ssim = ssim + structural_similarity(
             gt[slice_num], pred[slice_num], data_range=maxval
         )
+    val = ssim / gt.shape[0]
+    all_ssim.append(val)
 
-    return ssim / gt.shape[0]
+    return val
 
 
 METRIC_FUNCS = dict(
@@ -82,9 +93,10 @@ class Metrics:
     def __repr__(self):
         means = self.means()
         stddevs = self.stddevs()
+        medians = {'MSE': 0, 'NMSE': 0, 'PSNR': np.median(all_psnr), 'SSIM': np.median(all_ssim)}
         metric_names = sorted(list(means))
         return " ".join(
-            f"{name} = {means[name]:.4g} +/- {2 * stddevs[name]:.4g}"
+            f"{name} = {means[name]:.4g} +/- {2 * stddevs[name]:.4g}, Median = {medians[name]}\n"
             for name in metric_names
         )
 
@@ -96,13 +108,35 @@ def evaluate(args, recons_key):
         ) as recons:
             if args.acquisition and args.acquisition != target.attrs["acquisition"]:
                 continue
-            target = target['reconstruction_rss'][()]
+            target = transforms.to_tensor(target['kspace'][()])
+            target = fastmri.ifft2c(target)
+            target = fastmri.complex_abs(target).numpy()
             recons = recons["reconstruction"][()]
 
             metrics.push(target, recons)
 
     return metrics
 
+def get_avg_slice_time(args):
+    with open(args.time_path, 'rb') as f:
+        times = pickle.load(f)
+        total_time = 0
+        num_volumes = len(times)
+        num_slices = 0
+        for file_name in times:
+            volume = times[file_name]
+            num_slices = num_slices + len(volume)
+            total_time = np.sum(volume, axis=0)[1] + total_time
+        
+        print(f'Average time per slice: {total_time/num_slices}')
+        print(f'Average time per volume: {total_time/num_volumes}')
+            
+def save_histogram(metric_name, metric_list, method):
+    plt.hist(metric_list, density=True, facecolor='b', alpha=0.75)
+    plt.title(f'Histogram for PSNR from {method} reconstructioon')
+    plt.xlabel(metric_name)
+    plt.grid(True)
+    plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/graphs/{method}_{metric_name}.png')
 
 if __name__ == "__main__":
     parser = ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -117,6 +151,18 @@ if __name__ == "__main__":
         type=pathlib.Path,
         required=True,
         help="Path to reconstructions",
+    )
+    parser.add_argument(
+        "--time-path",
+        type=pathlib.Path,
+        required=True,
+        help="Path to reconstruction times",
+    )
+    parser.add_argument(
+        "--method",
+        type=str,
+        required=True,
+        help="Method being evaluated",
     )
     parser.add_argument(
         "--challenge",
@@ -142,8 +188,7 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    recons_key = (
-        "kspace" if args.challenge == "multicoil" else "reconstruction_esc"
-    )
-    metrics = evaluate(args, recons_key)
+    metrics = evaluate(args, 'reconstruction_rss')
     print(metrics)
+    get_avg_slice_time(args)
+    save_histogram('PSNR', all_psnr, args.method)

@@ -267,7 +267,7 @@ def save_outputs(outputs, output_path):
     }
 
     utils.save_reconstructions(reconstructions, output_path)
-    with open('out/pnp_times.pkl', 'wb') as f:
+    with open('out/recon_times.pkl', 'wb') as f:
         pickle.dump(times, f)
 
 

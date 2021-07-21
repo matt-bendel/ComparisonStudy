@@ -17,14 +17,15 @@ from utils import fastmri
 from utils.fastmri import save_reconstructions
 import numpy as np
 import torch
-
+from utils import fastmri
+from utils.fastmri.data import transforms
 from utils.fastmri import tensor_to_complex_np
 from utils.fastmri.data import SliceDataset
 from utils.fastmri.data import transforms as T
 from utils.fastmri.data.subsample import MaskFunc
 import sigpy.mri as mr
 import random
-
+from skimage.metrics import peak_signal_noise_ratio
 from utils.fastmri.utils import generate_gro_mask
 
 count_num = 0
@@ -59,7 +60,7 @@ class DataTransform(object):
 
         return (masked_kspace, mask, target, fname, slice)
 
-def cs_total_variation(args, kspace, mask, slice):
+def cs_total_variation(args, kspace, mask, slice, wt):
     """
     Run ESPIRIT coil sensitivity estimation and Total Variation Minimization
     based reconstruction algorithm using the BART toolkit.
@@ -85,7 +86,7 @@ def cs_total_variation(args, kspace, mask, slice):
     sens_maps = mr.app.EspiritCalib(kspace).run()
 
     # use Total Variation Minimization to reconstruct the image
-    pred = mr.app.TotalVariationRecon(kspace, sens_maps, 1e-5, max_iter=args.num_iters).run()
+    pred = mr.app.TotalVariationRecon(kspace, sens_maps, wt, max_iter=args.num_iters).run()
     pred = torch.from_numpy(np.abs(pred))
 
     return pred
@@ -107,11 +108,11 @@ def save_outputs(outputs, output_path):
 
     save_reconstructions(reconstructions, output_path)
 
-    with open('out/cs_times.pkl', 'wb') as f:
+    with open('out/recon_times.pkl', 'wb') as f:
         pickle.dump(times, f)
 
 
-def run_model(idx):
+def run_model(idx, reg_wt):
     """
     Run BART on idx index from dataset.
 
@@ -128,12 +129,34 @@ def run_model(idx):
     masked_kspace, mask, target, fname, slice_num = dataset[idx]
 
     prediction = cs_total_variation(
-        args, masked_kspace, mask, slice_num
+        args, masked_kspace, mask, slice_num, reg_wt
     )
 
     recon_time = time.perf_counter() - start_time
     return fname, slice_num, prediction, recon_time
 
+def run_model_grid_search(idx, reg_wt):
+    """
+    Run BART on idx index from dataset.
+
+    Args:
+        idx (int): The index of the dataset.
+
+    Returns:
+        tuple: tuple with
+            fname: Filename
+            slice_num: Slice number.
+            prediction: Reconstructed image.
+    """
+    start_time = time.perf_counter()
+    masked_kspace, mask, target, fname, slice_num = dataset[idx]
+
+    prediction = cs_total_variation(
+        args, masked_kspace, mask, slice_num, reg_wt
+    )
+
+    recon_time = time.perf_counter() - start_time
+    return target, prediction
 
 def run_cs(args):
     if args.num_procs == 0:
@@ -142,7 +165,7 @@ def run_cs(args):
         num_slices = len(dataset)
         print(f'RUNNING MODEL ON {num_slices} SLICES')
         for i in range(len(dataset)):
-            outputs.append(run_model(i))
+            outputs.append(run_model(i, 0.25*1e-4))
         time_taken = time.perf_counter() - start_time
     else:
         with multiprocessing.Pool(args.num_procs) as pool:
@@ -153,6 +176,28 @@ def run_cs(args):
 
     print(f"Run Time = {time_taken} s")
     save_outputs(outputs, args.output_path)
+
+def evaluate_outputs(gt, pred):
+    maxval = gt.max()
+    return peak_signal_noise_ratio(gt, pred, data_range=maxval)
+
+def run_cs_grid_search(args):
+    reg_wts = [0.25*1e-4,0.25*1e-5, 0.5*1e-5, 1e-5, 2*1e-5, 4*1e-5]
+    avg_psnr = []
+    median_psnr = []
+    for reg_wt in reg_wts:
+        psnr = []
+        for i in range(len(dataset)):
+            pred, target = run_model_grid_search(i, reg_wt)
+            pred = transforms.to_tensor(pred)
+            pred = transforms.center_crop(pred, (320,320)).numpy()
+            psnr.append(evaluate_outputs(target.numpy(), pred))
+
+        avg_psnr.append(np.mean(psnr))
+        median_psnr.append(np.median(psnr))
+     
+    print(f'Best Reg Wt according to avg PSNR = {reg_wts[np.argmax(avg_psnr)]} - index = {np.argmax(avg_psnr)}')
+    print(f'Best Reg Wt according to median PSNR = {reg_wts[np.argmax(median_psnr)]} - index = {np.argmax(median_psnr)}')
 
 
 def create_arg_parser():
@@ -192,9 +237,10 @@ def create_arg_parser():
 
 if __name__ == "__main__":
     parser = create_arg_parser()
+    parser.add_argument('--grid-search', default=False)
     parser.add_argument('--output_path', type=pathlib.Path, default=pathlib.Path('out'),
 	                help='Path to save the reconstructions to')
-    parser.add_argument('--num-iters', type=int, default=250,
+    parser.add_argument('--num-iters', type=int, default=200,
 	                help='Number of iterations to run the reconstruction algorithm')
     parser.add_argument('--reg-wt', type=float, default=1e-10,
 	                help='Regularization weight parameter')
@@ -211,9 +257,12 @@ if __name__ == "__main__":
 
     dev_mask = MaskFunc(args.center_fractions, args.accelerations)
     dataset = SliceDataset(
-	root=args.data_path / f'singlecoil_val',
+	root=args.data_path / f'singlecoil_test',
 	transform=DataTransform(dev_mask),
 	challenge='singlecoil',
 	sample_rate=args.sample_rate
     )
-    run_cs(args)
+    if args.grid_search:
+        run_cs_grid_search(args)
+    else:
+        run_cs(args)

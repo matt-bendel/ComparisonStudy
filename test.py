@@ -23,18 +23,8 @@ def get_gro_mask(mask_shape):
     mask_shape[-2] = num_cols
     return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
-def general(file_type):
-    if file_type == 'FLAIR':
-        file_name = 'file_brain_AXFLAIR_200_6002581.h5'
-    
-    if file_type == 'T1':
-        file_name = 'file_brain_AXT1_202_6000296.h5'
-    
-    if file_type == 'T2':
-        file_name = 'file_brain_AXT2_200_2000414.h5'
-
-    if file_type == 'T1-WC':
-        file_name = 'file_brain_AXT1POST_205_6000151.h5'
+def general():    
+    file_name = 'file_brain_AXT2_200_2000414.h5'
 
     with h5py.File(f'/storage/fastMRI_brain/data/Matt_preprocessed_data/singlecoil_val/{file_name}', "r") as target, \
             h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/base_cs/out/{file_name}', 'r') as recons, \
@@ -63,12 +53,14 @@ def general(file_type):
 
 
         plt.figure(figsize=(6,6))
+        plt.title(f'{file_type} Ground Truth')
         plt.imshow(np.abs(target), cmap='gray')
         plt.tick_params(left=False, bottom=False, labelleft=False, labelbottom= False)
         plt.xlabel('Ground Truth')
         plt.savefig(f'GT_{file_type}.png')
 
         fig = plt.figure(figsize=(6,6))
+        fig.title(f'{file_type} Reconostructions')
         ax2 = fig.add_subplot(2, 2, 1)
         ax2.imshow(np.abs(zfr), cmap='gray')
         ax2.set_xticks([])
@@ -95,4 +87,4 @@ def general(file_type):
 
         plt.savefig(f'{file_type}_RECONS.png')
 
-general('T1-WC')
+general()

@@ -42,7 +42,7 @@ def test_zero_filled(data_dir, out_dir):
 
     fastmri.save_reconstructions(reconstructions, out_dir)
 
-data = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/singlecoil_val')
+data = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
 # data = Path('/Users/mattbendel/Desktop/Professional/PhD/ComparisonStudy/test_dir/preprocessed/singlecoil_val')
 out = Path('out')
 

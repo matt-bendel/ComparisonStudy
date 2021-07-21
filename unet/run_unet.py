@@ -100,7 +100,7 @@ class DataTransform:
 
 def create_data_loaders(args):
     data = SliceDataset(
-        root=args.data_path / f'singlecoil_val',
+        root=args.data_path / f'singlecoil_test',
         transform=DataTransform(args),
         sample_rate=1.0,
         challenge='singlecoil',
@@ -195,7 +195,7 @@ def run_unet(args, model, data_loader):
         for fname, slice_preds in reconstructions.items()
     }
 
-    with open('out/pnp_times.pkl', 'wb') as f:
+    with open('out/recon_times.pkl', 'wb') as f:
         pickle.dump(times, f)
     return reconstructions
 
