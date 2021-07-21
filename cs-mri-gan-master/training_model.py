@@ -243,7 +243,7 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data,  n_epochs, n_ba
             g_loss = gan_model.train_on_batch ([X_gen_inp], [y_gan, X_r, X_r])
             f.write('>%d, %d/%d, d=%.3f, acc = %.3f,  w=%.3f,  mae=%.3f,  mssim=%.3f, g=%.3f' %(i+1, j+1, bat_per_epo, d_loss, accuracy, g_loss[1], g_loss[2], g_loss[3], g_loss[0]))
             f.write('\n')
-            print ('>%d, %d/%d, d=%.3f, acc = %.3f, g=%.3f' %(i+1, j+1, bat_per_epo, d_loss, accuracy, g_loss[0]))
+            print('>%d, %d/%d, d=%.3f, acc = %.3f, g=%.3f' %(i+1, j+1, bat_per_epo, d_loss, accuracy, g_loss[0]))
         filename = '/home/cs-mri-gan/gen_weights_a5_%04d.h5' % (i+1)
         g_save = g_par.get_layer('model_3')
         g_save.save_weights(filename)

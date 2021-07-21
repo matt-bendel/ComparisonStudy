@@ -19,7 +19,9 @@ def get_psnr(gt, pred):
 
 # h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im, \
 data_dir = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
+count =0
 for fname in tqdm(list(data_dir.glob("*.h5"))):
+    count=count+1
     file_name = fname.name
     with h5py.File(fname, "r") as target, \
             h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/base_cs/out/{file_name}', 'r') as recons, \
@@ -49,21 +51,21 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
             unet_im = transforms.center_crop(unet_im, crop_size)
 
 
-        fig = plt.figure()
+        fig = plt.figure(figsize=(10,5))
         fig.suptitle('T2 Reconstructions')
-        ax2 = fig.add_subplot(1, 4, 1)
+        ax2 = fig.add_subplot(2, 4, 1)
         ax2.imshow(np.abs(target), cmap='gray')
         ax2.set_xticks([])
         ax2.set_yticks([])
         plt.xlabel('Ground Truth')
 
-        ax2 = fig.add_subplot(1, 4, 2)
+        ax2 = fig.add_subplot(2, 4, 2)
         ax2.imshow(np.abs(zfr), cmap='gray')
         ax2.set_xticks([])
         ax2.set_yticks([])
         plt.xlabel('ZFR')
 
-        ax3 = fig.add_subplot(1,4,3)
+        ax3 = fig.add_subplot(2,4,3)
         psnr = get_psnr(target, recons)
         ax3.set_title(f'PSNR: {psnr:.2f}')
         ax3.imshow(np.abs(recons), cmap='gray')
@@ -78,7 +80,7 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         #ax4.set_yticks([])
         #plt.xlabel('PnP (RED-GD)')
 
-        ax5 = fig.add_subplot(1, 4, 4)
+        ax5 = fig.add_subplot(2, 4, 4)
         psnr = get_psnr(target, unet_im)
         ax5.set_title(f'PSNR: {psnr:.2f}')
         ax5.imshow(np.abs(unet_im), cmap='gray')
@@ -86,5 +88,17 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         ax5.set_yticks([])
         plt.xlabel('Base Image U-Net')
 
-        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/{file_name}_recons.png')
+        ax6 = fig.add_subplot(2, 4, 7)
+        ax6.imshow(np.abs(target)-np.abs(recons), cmap='viridis')
+        ax6.set_xticks([])
+        ax6.set_yticks([])
+        plt.xlabel('CS-TV Error')
+
+        ax7 = fig.add_subplot(2, 4, 8)
+        ax7.imshow(np.abs(target)-np.abs(unet_im), cmap='viridis')
+        ax7.set_xticks([])
+        ax7.set_yticks([])
+        plt.xlabel('U-Net Error')
+
+        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
 

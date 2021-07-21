@@ -44,7 +44,7 @@ def load_a(path, num):
 
         return np.asarray(data), np.asarray(usamp_data)
 
-data = Path('/storage/fastMRI/data/Matt_preprocessed_data/singlecoil_train')
+data = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_train')
 train_gt, train_us = load_a(data,0)
 
 #data = Path('/storage/fastMRI_brain/data/multicoil_val')
