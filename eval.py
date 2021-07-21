@@ -41,22 +41,24 @@ def ssim(
     gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None
 ) -> np.ndarray:
     """Compute Structural Similarity Index Metric (SSIM)"""
-    if not gt.ndim == 3:
-        raise ValueError("Unexpected number of dimensions in ground truth.")
+    #if not gt.ndim == 3:
+     #   raise ValueError("Unexpected number of dimensions in ground truth.")
     if not gt.ndim == pred.ndim:
         raise ValueError("Ground truth dimensions does not match pred.")
 
     maxval = gt.max() if maxval is None else maxval
 
-    ssim = 0
-    for slice_num in range(gt.shape[0]):
-        ssim = ssim + structural_similarity(
-            gt[slice_num], pred[slice_num], data_range=maxval
+    ssim = structural_similarity(
+            gt, pred, data_range=maxval
         )
-    val = ssim / gt.shape[0]
-    all_ssim.append(val)
+    #for slice_num in range(gt.shape[0]):
+     #   ssim = ssim + structural_similarity(
+      #      gt[slice_num], pred[slice_num], data_range=maxval
+       # )
+    #val = ssim / gt.shape[0]
+    all_ssim.append(ssim)
 
-    return val
+    return ssim
 
 
 METRIC_FUNCS = dict(
@@ -112,8 +114,8 @@ def evaluate(args, recons_key):
             target = fastmri.ifft2c(target)
             target = fastmri.complex_abs(target).numpy()
             recons = recons["reconstruction"][()]
-
-            metrics.push(target, recons)
+            for i in range(target.shape[0]):
+                metrics.push(target[i], recons[i])
 
     return metrics
 
@@ -126,15 +128,22 @@ def get_avg_slice_time(args):
         for file_name in times:
             volume = times[file_name]
             num_slices = num_slices + len(volume)
-            total_time = np.sum(volume, axis=0)[1] + total_time
+            if args.method == 'cs':
+                total_time = np.sum(volume, axis=0)[1] + total_time
+            else:
+                total_time = np.sum(volume) + total_time
         
         print(f'Average time per slice: {total_time/num_slices}')
         print(f'Average time per volume: {total_time/num_volumes}')
             
 def save_histogram(metric_name, metric_list, method):
-    plt.hist(metric_list, density=True, facecolor='b', alpha=0.75)
-    plt.title(f'Histogram for PSNR from {method} reconstructioon')
+    x = np.array(metric_list)
+    plt.hist(x, density=True,bins=30)
+    mn, mx = plt.xlim()
+    plt.xlim(mn, mx)
+    plt.title(f'Histogram of {metric_name} from {method} reconstructioon')
     plt.xlabel(metric_name)
+    plt.ylabel('Probability')
     plt.grid(True)
     plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/graphs/{method}_{metric_name}.png')
 
@@ -191,4 +200,5 @@ if __name__ == "__main__":
     metrics = evaluate(args, 'reconstruction_rss')
     print(metrics)
     get_avg_slice_time(args)
-    save_histogram('PSNR', all_psnr, args.method)
+    #save_histogram('PSNR', all_psnr, args.method)
+    save_histogram('SSIM', all_ssim, args.method)
