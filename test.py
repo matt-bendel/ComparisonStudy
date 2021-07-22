@@ -70,9 +70,9 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         fig.suptitle('T2 Reconstructions')
         generate_image(fig, gt_max, target, 'GT', 1)
         generate_image(fig, gt_max, zfr, 'ZFR', 2)
-        generate_image(fig, gt_max, unet_im, 'Some Method', 3)
+        generate_image(fig, gt_max, unet_im, 'U-Net', 3)
         generate_error_map(fig, gt_max, target, zfr, 'ZFR', 5)
-        generate_error_map(fig, gt_max, target, unet_im, 'Some Method', 5)
+        generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 6)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}_test.png')
 
