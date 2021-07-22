@@ -1,5 +1,5 @@
 import numpy as np
-
+from skimage.metrics import peak_signal_noise_ratio
 from utils import fastmri
 import h5py
 from utils.fastmri.data import transforms
@@ -10,11 +10,23 @@ from pathlib import Path
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 rows = 2
-cols = 3
+cols = 4
 
-def generate_image(fig, max, image, method, image_ind):
+def get_psnr(gt, pred):
+    maxval = gt.max()
+    return peak_signal_noise_ratio(gt, pred, data_range=maxval)
+
+def get_snr(target, pred):
+    noise = np.abs(target - pred)
+    return 20*np.log10(np.mean(target)/np.mean(noise))
+
+def generate_image(fig, max, target, image, method, image_ind):
     # rows and cols are both previously defined ints
     ax = fig.add_subplot(rows, cols, image_ind)
+    if method != 'GT':
+        psnr = get_psnr(target, image)
+        snr = get_snr(target, image)
+        ax.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
     ax.imshow(np.abs(image), cmap='gray', extent=[0, max, 0, max])
     ax.set_xticks([])
     ax.set_yticks([])
@@ -66,9 +78,11 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         fig.suptitle('T2 Reconstructions')
         generate_image(fig, gt_max, target, 'GT', 1)
         generate_image(fig, gt_max, zfr, 'ZFR', 2)
-        generate_image(fig, gt_max, unet_im, 'U-Net', 3)
-        generate_error_map(fig, gt_max, target, zfr, 'ZFR', 5)
-        generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 6)
+        generate_image(fig, gt_max, recons, 'CS-TV', 3)
+        generate_image(fig, gt_max, unet_im, 'U-Net', 4)
+        generate_error_map(fig, gt_max, target, zfr, 'ZFR', 6)
+        generate_error_map(fig, gt_max, target, recons, 'CS-TV', 7)
+        generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
 
-        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}_test.png')
+        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
 
