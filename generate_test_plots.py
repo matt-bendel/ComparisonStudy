@@ -17,11 +17,9 @@ def get_psnr(gt, pred):
     maxval = gt.max()
     return peak_signal_noise_ratio(gt, pred, data_range=maxval)
 
-def get_snr(a, axis=0, ddof=0):
-    a = np.asanyarray(a)
-    m = a.mean(axis)
-    sd = a.std(axis=axis, ddof=ddof)
-    return np.where(sd == 0, 0, m / sd)
+def get_snr(target, pred):
+    noise = np.abs(target - pred)
+    return 20*np.log10(np.mean(target)/np.mean(noise))
 
 # h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im, \
 data_dir = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
@@ -56,10 +54,9 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
             unet_im = transforms.center_crop(unet_im, crop_size)
 
         gt_max = target.max()
-        k = 5
+        k = 7
 
         fig = plt.figure(figsize=(12,6))
-        fig.colorbar()
         fig.suptitle('T2 Reconstructions')
         ax2 = fig.add_subplot(2, 4, 1)
         ax2.imshow(np.abs(target), cmap='gray', extent=[0, gt_max, 0, gt_max])
@@ -69,7 +66,7 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
 
         ax2 = fig.add_subplot(2, 4, 2)
         psnr = get_psnr(target, zfr)
-        snr = get_snr(zfr, axis=None)
+        snr = get_snr(target, zfr)
         ax2.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
         ax2.imshow(np.abs(zfr), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax2.set_xticks([])
@@ -78,7 +75,7 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
 
         ax3 = fig.add_subplot(2,4,3)
         psnr = get_psnr(target, recons)
-        snr = get_snr(recons, axis=None)
+        snr = get_snr(target, recons)
         ax3.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
         ax3.imshow(np.abs(recons), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax3.set_xticks([])
@@ -94,7 +91,7 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
 
         ax5 = fig.add_subplot(2, 4, 4)
         psnr = get_psnr(target, unet_im)
-        snr = get_snr(unet_im, axis=None)
+        snr = get_snr(target, unet_im)
         ax5.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
         ax5.imshow(np.abs(unet_im), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax5.set_xticks([])

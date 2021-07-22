@@ -139,9 +139,9 @@ def save_histogram(metric_name, metric_list, method):
     x = np.array(metric_list)
     plt.hist(x, density=True,bins=30)
     if metric_name == 'PSNR':
-        plt.xlim(20, 50)
+        plt.xlim(20, 40)
     else:
-        plt.xlim(0,1)
+        plt.xlim(0.7,1)
     plt.title(f'Histogram of {metric_name} from {method} reconstructioon')
     plt.xlabel(metric_name)
     plt.ylabel('Frequency')
@@ -201,5 +201,5 @@ if __name__ == "__main__":
     metrics = evaluate(args, 'reconstruction_rss')
     print(metrics)
     get_avg_slice_time(args)
-    #save_histogram('PSNR', all_psnr, args.method)
-    save_histogram('SSIM', all_ssim, args.method)
+    save_histogram('PSNR', all_psnr, args.method)
+    #save_histogram('SSIM', all_ssim, args.method)
