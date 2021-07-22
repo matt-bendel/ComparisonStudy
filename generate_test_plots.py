@@ -96,7 +96,7 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         ax5.imshow(np.abs(unet_im), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax5.set_xticks([])
         ax5.set_yticks([])
-        plt.xlabel('Base Image U-Net')
+        plt.xlabel('U-Net')
 
         ax4 = fig.add_subplot(2, 4, 6)
         ax4.imshow(k*np.abs(target - zfr), cmap='jet', extent=[0, gt_max, 0, gt_max])
