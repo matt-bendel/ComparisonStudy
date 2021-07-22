@@ -36,10 +36,11 @@ def generate_error_map(fig, max, target, recon, method, image_ind, k=5):
     # Assume rows and cols are available globally
     # rows and cols are both previously defined ints
     ax = fig.add_subplot(rows, cols, image_ind)
-    ax.imshow(k * np.abs(target - recon), cmap='jet', extent=[0, max, 0, max])
+    im = ax.imshow(k * np.abs(target - recon), cmap='jet', extent=[0, max, 0, max])
     ax.set_xticks([])
     ax.set_yticks([])
     plt.xlabel(f'{method} Error')
+    return im, ax
 
 # h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im, \
 data_dir = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
@@ -80,9 +81,12 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         generate_image(fig, gt_max, target, zfr, 'ZFR', 2)
         generate_image(fig, gt_max, target, recons, 'CS-TV', 3)
         generate_image(fig, gt_max, target, unet_im, 'U-Net', 4)
-        generate_error_map(fig, gt_max, target, zfr, 'ZFR', 6)
-        generate_error_map(fig, gt_max, target, recons, 'CS-TV', 7)
-        generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
+        axes = np.array()
+        im, axes[0] = generate_error_map(fig, gt_max, target, zfr, 'ZFR', 6)
+        im, axes[1] = generate_error_map(fig, gt_max, target, recons, 'CS-TV', 7)
+        im, axes[2] = generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
+
+        fig.colorbar(im, ax=axes.ravel().tolist())
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
 
