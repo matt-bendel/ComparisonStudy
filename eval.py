@@ -10,7 +10,6 @@ from utils import fastmri
 from utils.fastmri.data import transforms
 from runstats import Statistics
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
-import matplotlib.pyplot as plt
 import pickle
 
 all_psnr = []
@@ -139,11 +138,13 @@ def get_avg_slice_time(args):
 def save_histogram(metric_name, metric_list, method):
     x = np.array(metric_list)
     plt.hist(x, density=True,bins=30)
-    mn, mx = plt.xlim()
-    plt.xlim(mn, mx)
+    if metric_name == 'PSNR':
+        plt.xlim(20, 50)
+    else:
+        plt.xlim(0,1)
     plt.title(f'Histogram of {metric_name} from {method} reconstructioon')
     plt.xlabel(metric_name)
-    plt.ylabel('Probability')
+    plt.ylabel('Frequency')
     plt.grid(True)
     plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/graphs/{method}_{metric_name}.png')
 

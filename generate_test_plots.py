@@ -17,6 +17,12 @@ def get_psnr(gt, pred):
     maxval = gt.max()
     return peak_signal_noise_ratio(gt, pred, data_range=maxval)
 
+def get_snr(a, axis=0, ddof=0):
+    a = np.asanyarray(a)
+    m = a.mean(axis)
+    sd = a.std(axis=axis, ddof=ddof)
+    return np.where(sd == 0, 0, m / sd)
+
 # h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im, \
 data_dir = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
 count =0
@@ -28,7 +34,6 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
                 h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/zero_filled/out/{file_name}') as zf, \
                     h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/unet/out/{file_name}') as unet_im:
         ind = transforms.to_tensor(target['kspace'][()]).shape[0] // 2
-        ind = 0
         need_cropped = False
         crop_size = (320, 320)
         target = transforms.to_tensor(target['kspace'][()])
@@ -50,25 +55,32 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
             # pnp_im = transforms.center_crop(pnp_im, crop_size)
             unet_im = transforms.center_crop(unet_im, crop_size)
 
+        gt_max = target.max()
+        k = 5
 
-        fig = plt.figure(figsize=(10,5))
+        fig = plt.figure(figsize=(12,6))
+        fig.colorbar()
         fig.suptitle('T2 Reconstructions')
         ax2 = fig.add_subplot(2, 4, 1)
-        ax2.imshow(np.abs(target), cmap='gray')
+        ax2.imshow(np.abs(target), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax2.set_xticks([])
         ax2.set_yticks([])
         plt.xlabel('Ground Truth')
 
         ax2 = fig.add_subplot(2, 4, 2)
-        ax2.imshow(np.abs(zfr), cmap='gray')
+        psnr = get_psnr(target, zfr)
+        snr = get_snr(zfr, axis=None)
+        ax2.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
+        ax2.imshow(np.abs(zfr), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax2.set_xticks([])
         ax2.set_yticks([])
         plt.xlabel('ZFR')
 
         ax3 = fig.add_subplot(2,4,3)
         psnr = get_psnr(target, recons)
-        ax3.set_title(f'PSNR: {psnr:.2f}')
-        ax3.imshow(np.abs(recons), cmap='gray')
+        snr = get_snr(recons, axis=None)
+        ax3.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
+        ax3.imshow(np.abs(recons), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax3.set_xticks([])
         ax3.set_yticks([])
         plt.xlabel('CS-TV')
@@ -82,20 +94,27 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
 
         ax5 = fig.add_subplot(2, 4, 4)
         psnr = get_psnr(target, unet_im)
-        ax5.set_title(f'PSNR: {psnr:.2f}')
-        ax5.imshow(np.abs(unet_im), cmap='gray')
+        snr = get_snr(unet_im, axis=None)
+        ax5.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
+        ax5.imshow(np.abs(unet_im), cmap='gray', extent=[0, gt_max, 0, gt_max])
         ax5.set_xticks([])
         ax5.set_yticks([])
         plt.xlabel('Base Image U-Net')
 
+        ax4 = fig.add_subplot(2, 4, 6)
+        ax4.imshow(k*np.abs(target - zfr), cmap='jet', extent=[0, gt_max, 0, gt_max])
+        ax4.set_xticks([])
+        ax4.set_yticks([])
+        plt.xlabel('ZFR Error')
+
         ax6 = fig.add_subplot(2, 4, 7)
-        ax6.imshow(np.abs(target)-np.abs(recons), cmap='viridis')
+        ax6.imshow(k*np.abs(target-recons), cmap='jet', extent=[0, gt_max, 0, gt_max])
         ax6.set_xticks([])
         ax6.set_yticks([])
         plt.xlabel('CS-TV Error')
 
         ax7 = fig.add_subplot(2, 4, 8)
-        ax7.imshow(np.abs(target)-np.abs(unet_im), cmap='viridis')
+        ax7.imshow(k*np.abs(target-unet_im), cmap='jet', extent=[0, gt_max, 0, gt_max])
         ax7.set_xticks([])
         ax7.set_yticks([])
         plt.xlabel('U-Net Error')
