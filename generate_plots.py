@@ -1,5 +1,5 @@
 import numpy as np
-from skimage.metrics import peak_signal_noise_ratio
+from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 from utils import fastmri
 import h5py
 from utils.fastmri.data import transforms
@@ -18,7 +18,13 @@ def get_psnr(gt, pred):
 
 def get_snr(target, pred):
     noise = np.abs(target - pred)
-    return 20*np.log10(np.mean(target)/np.mean(noise))
+    return 10*np.log10(np.mean(target)/np.mean(noise))
+
+def get_ssim(target, pred):
+    maxval = target.max()
+    return structural_similarity(
+        target, pred, data_range=maxval
+    )
 
 def generate_image(fig, max, target, image, method, image_ind):
     # rows and cols are both previously defined ints
@@ -26,7 +32,8 @@ def generate_image(fig, max, target, image, method, image_ind):
     if method != 'GT':
         psnr = get_psnr(target, image)
         snr = get_snr(target, image)
-        ax.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}')
+        ssim = get_ssim(target, image)
+        ax.set_title(f'PSNR: {psnr:.2f}\nSNR: {snr:.2f}\nSSIM: {ssim:.4f}')
     ax.imshow(np.abs(image), cmap='gray', extent=[0, max, 0, max])
     ax.set_xticks([])
     ax.set_yticks([])
@@ -36,10 +43,11 @@ def generate_error_map(fig, max, target, recon, method, image_ind, k=5):
     # Assume rows and cols are available globally
     # rows and cols are both previously defined ints
     ax = fig.add_subplot(rows, cols, image_ind)
-    ax.imshow(k * np.abs(target - recon), cmap='jet', vmin=0, vmax=max, extent=[0, max, 0, max])
+    im = ax.imshow(k * np.abs(target - recon), cmap='jet', vmin=0, vmax=max, extent=[0, max, 0, max])
     ax.set_xticks([])
     ax.set_yticks([])
     plt.xlabel(f'{method} Error')
+    return im, ax
 
 # h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im, \
 data_dir = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
@@ -82,7 +90,14 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         generate_image(fig, gt_max, target, unet_im, 'U-Net', 4)
         generate_error_map(fig, gt_max, target, zfr, 'ZFR', 6)
         generate_error_map(fig, gt_max, target, recons, 'CS-TV', 7)
-        generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
+        im, ax = generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
+
+        fig.subplots_adjust(right=0.85)
+        [[x10, y10], [x11, y11]] = ax[1].get_position().get_points()
+        pad = 0.01
+        width = 0.02
+        cbar_ax = fig.add_axes([x11 + pad, y10, width, y11 - y10])
+        axcb = fig.colorbar(im, cax=cbar_ax)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
 
