@@ -51,6 +51,20 @@ def generate_error_map(fig, x_max, target, recon, method, image_ind, k=2):
     plt.xlabel(f'{method} Error')
     return im, ax
 
+def get_colorbar(fig, im, ax):
+    fig.subplots_adjust(right=0.85) # Make room for colorbar
+
+    # Get position of final error map axis
+    [[x10, y10], [x11, y11]] = ax.get_position().get_points()
+
+    # Appropriately rescale final axis so that colorbar does not effect formatting
+    pad = 0.01
+    width = 0.02
+    cbar_ax = fig.add_axes([x11 + pad, y10, width, y11 - y10])
+
+    fig.colorbar(im, cax=cbar_ax) # Generate colorbar
+
+
 # h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im, \
 data_dir = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
 count =0
@@ -94,12 +108,14 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         generate_error_map(fig, gt_max, target, recons, 'CS-TV', 7)
         im, ax = generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
 
-        fig.subplots_adjust(right=0.85)
-        [[x10, y10], [x11, y11]] = ax.get_position().get_points()
-        pad = 0.01
-        width = 0.02
-        cbar_ax = fig.add_axes([x11 + pad, y10, width, y11 - y10])
-        axcb = fig.colorbar(im1, cax=cbar_ax)
+        # fig.subplots_adjust(right=0.85)
+        # [[x10, y10], [x11, y11]] = ax.get_position().get_points()
+        # pad = 0.01
+        # width = 0.02
+        # cbar_ax = fig.add_axes([x11 + pad, y10, width, y11 - y10])
+        # axcb = fig.colorbar(im1, cax=cbar_ax)
+
+        get_colorbar(fig, im, ax)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
 
