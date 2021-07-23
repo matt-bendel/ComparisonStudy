@@ -17,8 +17,8 @@ def get_psnr(gt, pred):
     return peak_signal_noise_ratio(gt, pred, data_range=maxval)
 
 def get_snr(target, pred):
-    noise = np.abs(target - pred)
-    return 20*np.log10(np.mean(target)/np.mean(noise))
+    noise_mse = np.mean((target - pred)**2)
+    return 10*np.log10(np.mean(target**2)/noise_mse)
 
 def get_ssim(target, pred):
     maxval = target.max()
