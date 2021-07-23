@@ -14,6 +14,7 @@ import pickle
 
 all_psnr = []
 all_ssim = []
+all_snr = []
 
 def mse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     """Compute Mean Squared Error (MSE)"""
@@ -35,6 +36,12 @@ def psnr(
     all_psnr.append(psnr_val)
     return psnr_val
 
+def snr(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
+    """Compute the Signal to Noise Ratio metric (SNR)"""
+    noise_mse = np.mean((gt - pred)**2)
+    snr = 10*np.log10(np.mean(gt**2)/noise_mse)
+    all_snr.append(snr)
+    return snr
 
 def ssim(
     gt: np.ndarray, pred: np.ndarray, maxval: Optional[float] = None
@@ -65,6 +72,7 @@ METRIC_FUNCS = dict(
     NMSE=nmse,
     PSNR=psnr,
     SSIM=ssim,
+    SNR=snr,
 )
 
 
@@ -94,7 +102,7 @@ class Metrics:
     def __repr__(self):
         means = self.means()
         stddevs = self.stddevs()
-        medians = {'MSE': 0, 'NMSE': 0, 'PSNR': np.median(all_psnr), 'SSIM': np.median(all_ssim)}
+        medians = {'MSE': 0, 'NMSE': 0, 'PSNR': np.median(all_psnr), 'SSIM': np.median(all_ssim), 'SNR': np.median(all_snr)}
         metric_names = sorted(list(means))
         return " ".join(
             f"{name} = {means[name]:.4g} +/- {2 * stddevs[name]:.4g}, Median = {medians[name]}\n"
@@ -119,7 +127,7 @@ def evaluate(args, recons_key):
     return metrics
 
 def get_avg_slice_time(args):
-    with open(args.time_path, 'rb') as f:
+    with open(args.predictions_path / 'recon_times.pkl', 'rb') as f:
         times = pickle.load(f)
         total_time = 0
         num_volumes = len(times)
@@ -140,6 +148,8 @@ def save_histogram(metric_name, metric_list, method):
     plt.hist(x, density=True,bins=30)
     if metric_name == 'PSNR':
         plt.xlim(20, 40)
+    elif metric_name == 'SNR':
+        plt.xlim(10, 30)
     else:
         plt.xlim(0.7,1)
     plt.title(f'Histogram of {metric_name} from {method} reconstructioon')
@@ -161,12 +171,6 @@ if __name__ == "__main__":
         type=pathlib.Path,
         required=True,
         help="Path to reconstructions",
-    )
-    parser.add_argument(
-        "--time-path",
-        type=pathlib.Path,
-        required=True,
-        help="Path to reconstruction times",
     )
     parser.add_argument(
         "--method",
@@ -201,5 +205,6 @@ if __name__ == "__main__":
     metrics = evaluate(args, 'reconstruction_rss')
     print(metrics)
     get_avg_slice_time(args)
-    save_histogram('PSNR', all_psnr, args.method)
+    #save_histogram('PSNR', all_psnr, args.method)
+    save_histogram('SNR', all_snr, args.method)
     #save_histogram('SSIM', all_ssim, args.method)
