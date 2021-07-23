@@ -9,7 +9,7 @@ def generate_image(fig, max, image, method, image_ind):
     # Assume rows and cols are available globally
     # rows and cols are both previously defined ints
     ax = fig.add_subplot(rows, cols, image_ind) # Add to subplot
-    ax.imshow(np.abs(image), cmap='gray', extent=[0, max, 0, max]) # Plot image
+    ax.imshow(np.abs(image), cmap='gray') # Plot image
 
     # Remove axis ticks
     ax.set_xticks([])
@@ -27,7 +27,7 @@ def generate_error_map(fig, max, target, recon, method, image_ind, k=5):
     error = np.abs(target - recon)
     normalized_error = error / error.max()
 
-    im = ax.imshow(k * np.abs(target - recon), cmap='jet', extent=[0, max, 0, max]) # Plot image
+    im = ax.imshow(k * normalized_error, cmap='jet', vmin=0, vmax=1) # Plot image
 
     # Remove axis ticks
     ax.set_xticks([])
