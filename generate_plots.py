@@ -108,13 +108,6 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         generate_error_map(fig, gt_max, target, recons, 'CS-TV', 7)
         im, ax = generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
 
-        # fig.subplots_adjust(right=0.85)
-        # [[x10, y10], [x11, y11]] = ax.get_position().get_points()
-        # pad = 0.01
-        # width = 0.02
-        # cbar_ax = fig.add_axes([x11 + pad, y10, width, y11 - y10])
-        # axcb = fig.colorbar(im1, cax=cbar_ax)
-
         get_colorbar(fig, im, ax)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')

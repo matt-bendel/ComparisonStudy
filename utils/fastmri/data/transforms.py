@@ -10,9 +10,58 @@ from typing import Dict, Optional, Sequence, Tuple, Union
 from ... import fastmri
 import numpy as np
 import torch
-
+from utils.fastmri import complex_abs
 from .subsample import MaskFunc
 
+def phase(data):
+    """
+    Compute the phse of a complex valued input tensor.
+
+    Args:
+        data (torch.Tensor): A complex valued tensor, where the size of the final dimension
+            should be 2.
+
+    Returns:
+        torch.Tensor: Phase of data
+    """
+    assert data.size(-1) == 2
+    real = data[...,0]
+    imag = data[...,1]
+    # real, imag = data.chunk(2,dim=-1)
+    return torch.atan2(imag,real)
+
+def polar_to_rect(mag,phase):
+    assert mag.size() == phase.size()
+    real = mag*torch.cos(phase)
+    imag = mag*torch.sin(phase)
+    return torch.stack([real,imag], dim=real.dim())
+
+def best_rotate(x, num_angles):
+
+    x_mag, x_phase = complex_abs(x), phase(x)
+
+    if num_angles < 1:
+        return x, 0
+    elif num_angles<2:
+        rot_angle = np.pi/4
+        x_rotate = polar_to_rect(x_mag, rot_angle+x_phase)
+        return x_rotate, rot_angle
+
+    rot_angle_ = np.pi/2*np.array(range(num_angles))/(num_angles-1) # try angles in [0,pi/2]
+    best_ratio = 0
+
+    for tmp_angle in rot_angle_:
+        tmp_phase = x_phase + tmp_angle
+        tmp_x = polar_to_rect(x_mag, tmp_phase)
+        tmp_ratio = torch.sqrt(torch.sum(tmp_x[...,0]**2))/torch.sqrt(torch.sum(tmp_x[...,1]**2))
+        if tmp_ratio > 1:
+            tmp_ratio**-1
+        if tmp_ratio > best_ratio:
+            best_ratio = tmp_ratio
+            best_angle = tmp_angle
+            x_rotate = tmp_x
+
+    return x_rotate, best_angle
 
 def to_tensor(data: np.ndarray) -> torch.Tensor:
     """

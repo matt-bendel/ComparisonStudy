@@ -35,42 +35,37 @@ from tensorboardX import SummaryWriter
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
-from espirit import espirit, espirit_proj, ifft, fft
-import sigpy as sp
-import sigpy.mri as mr
-import sigpy.plot as pl
-
 
 # from common.args import Args
-from common.args_new_brain import Args
-from common.subsample import MaskFunc
-from common.utils import tensor_to_complex_np
-from data import transforms
+from argparse import ArgumentParser
+from utils import fastmri
+from utils.fastmri import tensor_to_complex_np
+from utils.fastmri.data import transforms
 
-from data.brain_mri_data_UNet import SelectiveSliceData_Train
-from data.brain_mri_data_UNet import SelectiveSliceData_Val
+from utils.fastmri.data.mri_data import SelectiveSliceData_Train
+from utils.fastmri.data.mri_data import SelectiveSliceData_Val
 
-from models.unet.unet_model import UnetModel
+from utils.fastmri.utils import generate_gro_mask
 
-from models.PnP.dncnn import DnCNN
-# from models.PnP.dncnn import DnCNN
-# print("")
-# print('This code is using Bias Free DnCNN')
-# print("")
-# from models.PnP.BFdncnn import DnCNN
+from utils.fastmri.models.unet.unet import UnetModel
+
+from utils.fastmri.models.PnP.dncnn import DnCNN
 
 import pathlib
 from pathlib import Path 
 
-from data.multicoil_sim import random_map
-import scipy.misc
-
-import h5py
-
-#import wandb
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def get_gro_mask(mask_shape):
+    #Get Saved CSV Mask
+    mask = generate_gro_mask(mask_shape[-2])
+    shape = np.array(mask_shape)
+    shape[:-3] = 1
+    num_cols = mask_shape[-2]
+    mask_shape = [1 for _ in shape]
+    mask_shape[-2] = num_cols
+    return torch.from_numpy(mask.reshape(*mask_shape).astype(np.float32))
 
 def flatten(t):
     t = t.reshape(1,-1)
@@ -160,60 +155,15 @@ class DataTransform:
 
 
 #         device = torch.device(0)
-        kspace = kspace.transpose(1,2,0) 
-        x = ifft(kspace, (0,1)) #(768, 396, 16)
-        coil_compressed_x = ImageCropandKspaceCompression(x,self.image_size) #(384, 384, 8)
-        kspace = fft(coil_compressed_x, (1,0)) #(384, 384, 8)
+        mask = get_gro_mask(kspace.shape)
         kspace = transforms.to_tensor(kspace)
-        kspace = kspace.permute(2,0,1,3)
-        
-        if self.train:
-            path_name = '/storage/fastMRI_brain/Sens_Maps/8coil_train'
-        else:
-            path_name = '/storage/fastMRI_brain/Sens_Maps/8coil_val'
-        
-        fname_full = 'slice_' + str(slice) + '_' + fname
-        
-        sens_map_file_name = Path(path_name,fname_full)
-        with h5py.File(sens_map_file_name, 'r') as data:
-            sens_map_foo = np.array(list(data['sens_map']))
-            
-        # Inverse Fourier Transform to get image
-#         image = transforms.ifft2(kspace)
-        image = np.sum(sens_map_foo.conj()*coil_compressed_x , axis = -1)
-        image = transforms.to_tensor(image)
-#         print(image.shape)
-#         image = torch.zeros([320,320,2])
-        
-        # Crop input image
-        if self.random_crop:
-            image = transforms.complex_random_crop(image, (self.resolution,self.resolution))
-        else:
-            image = transforms.complex_center_crop(image, (self.resolution,self.resolution))
-        # Absolute value
-        if self.mag_only:
-            image = transforms.complex_abs(image).unsqueeze(2)
+        kspace = (kspace * mask) + 0.0
+        image = fastmri.ifft2c(kspace) #(320, 320)
 
         image, rot_angle = transforms.best_rotate(image, self.num_angles)
 
-        # normalize
-#         if self.normalize is None:
-#             scale = 1.0;
-#         elif self.normalize=='constant':
-#             scale = 0.0025 # constant scale
-# #             if self.rss_target:
-# #                 scale = scale/15 # this will make these methods have similar parameters to without rss
-#             image = image/scale
-#         elif self.normalize=='kspace':
-#             scale = torch.sqrt(torch.sum(kspace**2))*(2/kspace.numel())
-#             image = image/scale
-#         else:
-#             image, scale = transforms.denoiser_normalize(image, is_complex=(not self.mag_only), use_std=(self.normalize=='std') )
-
         scale = 0.0016 # constant scale
         image = image/scale
-
-#         image, scale = transforms.denoiser_normalize(image, is_complex = True, use_std = True )
 
         scale = torch.tensor([scale], dtype=torch.float)
 
@@ -234,7 +184,7 @@ def create_datasets(args):
     train_data = SelectiveSliceData_Train(
         root=args.data_path_train,
         transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True, rss_target=args.rss_target, train_data=True, image_size = 384),
-        challenge='multicoil',
+        challenge='singlecoil',
         sample_rate=1,
         use_top_slices=True,
         number_of_top_slices=args.num_of_top_slices,
@@ -246,7 +196,7 @@ def create_datasets(args):
     dev_data = SelectiveSliceData_Val(
         root=args.data_path_val,
         transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False, rss_target=args.rss_target, train_data=False, image_size = 384),
-        challenge='multicoil',
+        challenge='singlecoil',
         sample_rate=1,
         use_top_slices=True,
         number_of_top_slices=args.num_of_top_slices,
@@ -321,7 +271,6 @@ def train_epoch(args, epoch, model, data_loader, optimizer, writer):
                 f'Time = {time.perf_counter() - start_iter:.4f}s',
             )
         start_iter = time.perf_counter()
-        #wandb.log({'Train_MSE': np.mean(losses)}, step=epoch)
     return avg_loss, time.perf_counter() - start_epoch
 
 
@@ -341,13 +290,6 @@ def evaluate(args, epoch, model, data_loader, writer):
                 target = torch.cat(torch.chunk(target, 2, dim=1), dim=0) # may need to unsqueeze
                 scale = torch.cat([scale, scale], dim=0)
             output = model(input)
-            # target, output = target*scale, output*scale
-            # if args.phase_rotate:
-            #     rotate_45 = ((1/np.sqrt(2))*torch.Tensor([[[[1,-1]]]])).to(args.device)
-            #     target = transforms.complex_mult(target, rotate_45)
-            #     output = transforms.complex_mult(output, rotate_45)
-            # norm = norm.unsqueeze(1).unsqueeze(2).to(args.device)
-            # loss = F.mse_loss(output / norm, target / norm, size_average=False)
             output_error = torch.sum(torch.abs(output-target)**2, dim=(1,2,3))
             input_error = torch.sum(torch.abs(input-target)**2, dim=(1,2,3))
             target_l2 = torch.sum(torch.abs(target)**2, dim=(1,2,3))
@@ -355,14 +297,7 @@ def evaluate(args, epoch, model, data_loader, writer):
             output_nmse = (output_error/target_l2).tolist()
             losses = losses + output_nmse
             input_losses = input_losses + input_nmse
-            # for i in range(input.size(0)):
-            #     loss = F.mse_loss(output[i], target[i], reduction='sum')/F.mse_loss(target[i], torch.zeros_like(target[i]), reduction='sum')
-            #     input_loss = F.mse_loss(input[i], target[i], reduction='sum')/F.mse_loss(target[i], torch.zeros_like(target[i]), reduction='sum')
-            #     input_losses.append(input_loss.item())
-            #     losses.append(loss.item())
         writer.add_scalar('Dev_Loss', np.mean(losses), epoch)
-        #wandb.log({"Val_NMSE": np.mean(losses),
-         #          "input_NMSE": np.mean(input_losses)},step=epoch)
     return np.mean(losses), time.perf_counter() - start
 
 
@@ -375,7 +310,6 @@ def visualize(args, epoch, model, data_loader, writer):
         grid = torchvision.utils.make_grid(image, nrow=4, pad_value=1)
         writer.add_image(tag, grid, epoch)
         grid_np = np.transpose(grid.cpu().numpy(), (1,2,0))
-        #wandb.log({tag:wandb.Image(grid_np)},step=epoch)
 
     model.eval()
     with torch.no_grad():
@@ -416,7 +350,6 @@ def build_model(args):
         chans = 1
     else:
         chans = 2
-#     chans = 2
     if args.denoiser == 'DnCNN':
         batch_norm = 'full'
         if args.snorm:
@@ -464,7 +397,6 @@ def build_optim(args, params):
 
 
 def main(args):
-    #wandb.init(name=args.run_name, config=args, project="fastmri-denoiser-brain")
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(log_dir=str(args.exp_dir / 'summary'))
 
@@ -490,7 +422,6 @@ def main(args):
         optimizer = build_optim(args, model.parameters())
         best_dev_loss = 1e9
         start_epoch = 0
-    #wandb.watch(model)
     logging.info(args)
     logging.info(model)
 
@@ -514,7 +445,7 @@ def main(args):
 
 
 def create_arg_parser():
-    parser = Args()
+    parser = ArgumentParser()
     parser.add_argument('--num-layers', type=int, default=5, help='Number of dncnn layers') # Ted used 17 layers
     parser.add_argument('--num-pools', type=int, default=4, help='Number of U-Net pooling layers')
     parser.add_argument('--drop-prob', type=float, default=0.0, help='Dropout probability')
@@ -568,18 +499,7 @@ def create_arg_parser():
     parser.add_argument("--train", default=True, action='store_true', help="to differentiate between training and val data; used while accessing the sens maps")
     return parser
 
-
-# if __name__ == '__main__':
-#     args = create_arg_parser().parse_args()
-#     # restrict visible cuda devices
-#     os.environ['CUDA_VISIBLE_DEVICES'] = str(args.device)
-#     random.seed(args.seed)
-#     np.random.seed(args.seed)
-#     torch.manual_seed(args.seed)
-#     main(args)
-
 if __name__ == '__main__':
-    
     print("Running training code for the DnCNN denoiser for the Brain Data...")
     args = create_arg_parser().parse_args()
     # restrict visible cuda devices
