@@ -23,6 +23,8 @@ import numpy as np
 import torch
 import yaml
 
+from utils.fastmri.data.transforms import tensor_to_complex_np
+
 
 class SelectiveSliceData_Train(Dataset):
     """
@@ -531,7 +533,7 @@ class SliceDataset(torch.utils.data.Dataset):
             mask = np.asarray(hf["mask"]) if "mask" in hf else None
 
             target = transforms.to_tensor(kspace)[dataslice]
-            target = fastmri.complex_abs(fastmri.ifft2c(target))
+            target = tensor_to_complex_np(fastmri.ifft2c(target))
 
             attrs = dict(hf.attrs)
             attrs.update(metadata)
