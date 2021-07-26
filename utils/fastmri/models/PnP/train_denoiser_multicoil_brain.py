@@ -187,7 +187,7 @@ class DataTransform:
 def create_datasets(args):
 
     train_data = SelectiveSliceData_Train(
-        root=args.data_path_train,
+        root=args.data_path / f'singlecoil_train',
         transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True, rss_target=args.rss_target, train_data=True, image_size = 320),
         challenge='singlecoil',
         sample_rate=1,
@@ -199,7 +199,7 @@ def create_datasets(args):
     )
 
     dev_data = SelectiveSliceData_Val(
-        root=args.data_path_val,
+        root=args.data_path / f'singlecoil_val',
         transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False, rss_target=args.rss_target, train_data=False, image_size = 320),
         challenge='singlecoil',
         sample_rate=1,
