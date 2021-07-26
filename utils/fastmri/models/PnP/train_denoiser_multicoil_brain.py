@@ -177,8 +177,8 @@ class DataTransform:
         target = transforms.normalize(target, mean, std, eps=1e-11)
         target = target.clamp(-6, 6)
         # move real/imag to channel position
-        image = image.permute(2,0,1)
-        target = target.permute(2,0,1)
+        # image = image.permute(2,0,1)
+        # target = target.permute(2,0,1)
         
         return image, target, scale, attrs['norm'].astype(np.float32), rot_angle
 
