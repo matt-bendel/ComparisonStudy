@@ -42,6 +42,7 @@ from utils.fastmri.data import transforms
 
 from utils.fastmri.data.mri_data import SelectiveSliceData_Train
 from utils.fastmri.data.mri_data import SelectiveSliceData_Val
+from utils.fastmri.data.mri_data import SliceDataset
 
 from utils.fastmri.utils import generate_gro_mask
 
@@ -184,28 +185,41 @@ class DataTransform:
 
 def create_datasets(args):
 
-    train_data = SelectiveSliceData_Train(
-        root=args.data_path_train,
-        transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True, rss_target=args.rss_target, train_data=True, image_size = 384),
-        challenge='singlecoil',
-        sample_rate=1,
-        use_top_slices=True,
-        number_of_top_slices=args.num_of_top_slices,
-        fat_supress=None,
-        strength_3T=None,
-        restrict_size=False,
-    )
+    # train_data = SelectiveSliceData_Train(
+    #     root=args.data_path_train,
+    #     transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True, rss_target=args.rss_target, train_data=True, image_size = 384),
+    #     challenge='singlecoil',
+    #     sample_rate=1,
+    #     use_top_slices=True,
+    #     number_of_top_slices=args.num_of_top_slices,
+    #     fat_supress=None,
+    #     strength_3T=None,
+    #     restrict_size=False,
+    # )
+    #
+    # dev_data = SelectiveSliceData_Val(
+    #     root=args.data_path_val,
+    #     transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False, rss_target=args.rss_target, train_data=False, image_size = 384),
+    #     challenge='singlecoil',
+    #     sample_rate=1,
+    #     use_top_slices=True,
+    #     number_of_top_slices=args.num_of_top_slices,
+    #     fat_supress=None,
+    #     strength_3T=None,
+    #     restrict_size=False,
+    # )
 
-    dev_data = SelectiveSliceData_Val(
-        root=args.data_path_val,
-        transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False, rss_target=args.rss_target, train_data=False, image_size = 384),
+    train_data = SliceDataset(
+        root=args.data_path / f'singlecoil_train',
+        transform=DataTransform(args),
+        sample_rate=1.0,
         challenge='singlecoil',
-        sample_rate=1,
-        use_top_slices=True,
-        number_of_top_slices=args.num_of_top_slices,
-        fat_supress=None,
-        strength_3T=None,
-        restrict_size=False,
+    )
+    dev_data = SliceDataset(
+        root=args.data_path / f'singlecoil_val',
+        transform=DataTransform(args),
+        sample_rate=1.0,
+        challenge='singlecoil',
     )
         
     return dev_data, train_data
@@ -486,9 +500,11 @@ def create_arg_parser():
                         help='Which device to train on.')
     parser.add_argument('--exp-dir', type=pathlib.Path, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/modles/PnP',
                         help='Path where model and results should be saved')
-    parser.add_argument('--data-path-train', type=pathlib.Path,
-                        required=True)
-    parser.add_argument('--data-path-val', type=pathlib.Path,
+    # parser.add_argument('--data-path-train', type=pathlib.Path,
+    #                     required=True)
+    # parser.add_argument('--data-path-val', type=pathlib.Path,
+    #                     required=True)
+    parser.add_argument('--data-path', type=pathlib.Path,
                         required=True)
     parser.add_argument('--resume', action='store_true',
                         help='If set, resume the training from a previous model checkpoint. '
