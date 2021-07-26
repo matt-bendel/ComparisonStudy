@@ -177,6 +177,7 @@ class DataTransform:
         # target = transforms.normalize(target, mean, std, eps=1e-11)
         # target = target.clamp(-6, 6)
         # move real/imag to channel position
+        print(image.shape)
         image = image.permute(2,0,1)
         target = target.permute(2,0,1)
         
@@ -211,13 +212,13 @@ def create_datasets(args):
 
     train_data = SliceDataset(
         root=args.data_path / f'singlecoil_train',
-        transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True, rss_target=args.rss_target, train_data=True, image_size = 384),
+        transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True, rss_target=args.rss_target, train_data=True, image_size = 320),
         sample_rate=1.0,
         challenge='singlecoil',
     )
     dev_data = SliceDataset(
         root=args.data_path / f'singlecoil_val',
-        transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False, rss_target=args.rss_target, train_data=False, image_size = 384),
+        transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False, rss_target=args.rss_target, train_data=False, image_size = 320),
         sample_rate=1.0,
         challenge='singlecoil',
     )
