@@ -526,11 +526,11 @@ class SliceDataset(torch.utils.data.Dataset):
         fname, dataslice, metadata = self.examples[i]
 
         with h5py.File(fname, "r") as hf:
-            kspace = hf["kspace"][dataslice]
+            kspace = hf["kspace"]
 
             mask = np.asarray(hf["mask"]) if "mask" in hf else None
 
-            target = transforms.to_tensor(kspace)
+            target = transforms.to_tensor(kspace)[dataslice]
             target = fastmri.complex_abs(fastmri.ifft2c(target))
 
             attrs = dict(hf.attrs)
