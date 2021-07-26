@@ -528,7 +528,7 @@ class SliceDataset(torch.utils.data.Dataset):
         fname, dataslice, metadata = self.examples[i]
 
         with h5py.File(fname, "r") as hf:
-            kspace = hf["kspace"]
+            kspace = hf["kspace"][()]
 
             mask = np.asarray(hf["mask"]) if "mask" in hf else None
 
