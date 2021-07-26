@@ -58,7 +58,7 @@ gt_max = target.max() # Get max value from ground truth
 fig = plt.figure() # Create our figure
 fig.suptitle('T2 Reconstructions')
 
-# Generate the grayscale images of the GT and other reconstructions
+# Generate the grayscale images of the GT and reconstructions
 generate_image(fig, gt_max, target, 'GT', 1)
 generate_image(fig, gt_max, zfr_recon,'ZFR', 2)
 generate_image(fig, gt_max, general_recon, 'Some Method', 3)

@@ -133,7 +133,7 @@ class DataTransform:
         self.train = train_data
         self.image_size = image_size
 
-    def __call__(self, kspace, target, attrs, fname, slice):
+    def __call__(self, kspace, mk, target, attrs, fname, slice):
         """
         Args:
             kspace (numpy.array): Input k-space of shape (num_coils, rows, cols, 2) for multi-coil
