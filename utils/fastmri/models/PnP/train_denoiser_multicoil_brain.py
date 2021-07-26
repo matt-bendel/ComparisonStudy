@@ -413,8 +413,8 @@ def main(args):
         print(" ")
         args = checkpoint['args']
         args.lr = 1e-3
-        args.exp_dir = Path('/storage/fastMRI_brain/PnP_brain/models/DnCNN/Trial_8/')
-        args.run_name = 'std0.02_Trail_8_brain_continuation_of_trial_5'
+        args.exp_dir = Path('/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/')
+        args.run_name = 'denoiser_train'
         best_dev_loss = checkpoint['best_dev_loss']
         start_epoch = checkpoint['epoch']
         del checkpoint
@@ -486,6 +486,10 @@ def create_arg_parser():
                         help='Which device to train on.')
     parser.add_argument('--exp-dir', type=pathlib.Path, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/modles/PnP',
                         help='Path where model and results should be saved')
+    parser.add_argument('--data-path-train', type=pathlib.Path,
+                        required=True)
+    parser.add_argument('--data-path-val', type=pathlib.Path,
+                        required=True)
     parser.add_argument('--resume', action='store_true',
                         help='If set, resume the training from a previous model checkpoint. '
                              '"--checkpoint" should be set with this')
@@ -509,11 +513,9 @@ if __name__ == '__main__':
     if args.data_parallel or (args.device >= 0):
         if not args.data_parallel:
             os.environ['CUDA_VISIBLE_DEVICES'] = str(args.device)
-        os.environ["CUDA_VISIBLE_DEVICES"] = "1" # change it accordingly: "0,1", "0,2,3", "0,1,2,3"
+        os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3" # change it accordingly: "0,1", "0,2,3", "0,1,2,3"
         args.device = torch.device('cuda')
     else:
         args.device = torch.device('cpu')
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
+
     main(args)
