@@ -36,10 +36,8 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 
 
-# from common.args import Args
 from argparse import ArgumentParser
 from utils import fastmri
-from utils.fastmri import tensor_to_complex_np
 from utils.fastmri.data import transforms
 
 from utils.fastmri.data.mri_data import SelectiveSliceData_Train
@@ -481,7 +479,7 @@ def create_arg_parser():
                         help='If set, use multiple GPUs using data parallelism')
     parser.add_argument('--device', type=int, default=0,
                         help='Which device to train on.')
-    parser.add_argument('--exp-dir', type=pathlib.Path, default='/storage/fastMRI_brain/PnP_brain/models/DnCNN/Trial_9/',
+    parser.add_argument('--exp-dir', type=pathlib.Path, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/modles/PnP',
                         help='Path where model and results should be saved')
     parser.add_argument('--resume', action='store_true',
                         help='If set, resume the training from a previous model checkpoint. '
