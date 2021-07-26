@@ -484,7 +484,7 @@ def create_arg_parser():
     parser.add_argument('--batch-size', default=32, type=int, help='Mini batch size') #Ted used 16
     parser.add_argument('--patch-size', default=64, type=int, help='training patch size')
     parser.add_argument('--val-patch-size', default=384, type=int, help='val patch size')
-    parser.add_argument('--num-epochs', type=int, default=150, help='Number of training epochs') #old value 300
+    parser.add_argument('--num-epochs', type=int, default=100, help='Number of training epochs') #old value 300
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate') # Ted's default was 1e-3
     parser.add_argument('--lr-step-size', type=int, default=20,
                         help='Period of learning rate decay') #old value 100
@@ -500,7 +500,7 @@ def create_arg_parser():
                         help='If set, use multiple GPUs using data parallelism')
     parser.add_argument('--device', type=int, default=0,
                         help='Which device to train on.')
-    parser.add_argument('--exp-dir', type=pathlib.Path, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/modles/PnP',
+    parser.add_argument('--exp-dir', type=pathlib.Path, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP',
                         help='Path where model and results should be saved')
     # parser.add_argument('--data-path-train', type=pathlib.Path,
     #                     required=True)
