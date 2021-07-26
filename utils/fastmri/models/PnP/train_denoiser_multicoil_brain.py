@@ -229,7 +229,7 @@ def create_datasets(args):
 
 def create_data_loaders(args):
     dev_data, train_data = create_datasets(args)
-    display_data = [dev_data[i] for i in range(0, len(dev_data), len(dev_data) // 16)]
+    # display_data = [dev_data[i] for i in range(0, len(dev_data), len(dev_data) // 16)]
 
     train_loader = DataLoader(
         dataset=train_data,
@@ -244,13 +244,14 @@ def create_data_loaders(args):
         num_workers=16,
         pin_memory=True,
     )
-    display_loader = DataLoader(
-        dataset=display_data,
-        batch_size=16,
-        num_workers=16,
-        pin_memory=True,
-    )
-    return train_loader, dev_loader, display_loader
+    # display_loader = DataLoader(
+    #     dataset=display_data,
+    #     batch_size=16,
+    #     num_workers=16,
+    #     pin_memory=True,
+    # )
+    return train_loader, dev_loader
+    # return train_loader, dev_loader, display_loader
 
 
 def train_epoch(args, epoch, model, data_loader, optimizer, writer):
@@ -442,14 +443,14 @@ def main(args):
     logging.info(args)
     logging.info(model)
 
-    train_loader, dev_loader, display_loader = create_data_loaders(args)
+    train_loader, dev_loader = create_data_loaders(args)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, args.lr_step_size, args.lr_gamma)
 
     for epoch in range(start_epoch, args.num_epochs):
         scheduler.step(epoch)
         train_loss, train_time = train_epoch(args, epoch, model, train_loader, optimizer, writer)
         dev_loss, dev_time = evaluate(args, epoch, model, dev_loader, writer)
-        visualize(args, epoch, model, display_loader, writer)
+        # visualize(args, epoch, model, display_loader, writer)
 
         is_new_best = dev_loss < best_dev_loss
         best_dev_loss = min(best_dev_loss, dev_loss)
@@ -472,17 +473,17 @@ def create_arg_parser():
     parser.add_argument('--num-chans', type=int, default=64, help='Number of U-Net channels')
     parser.add_argument('--snorm', action='store_true', help='Turns on spectral normalization')
     parser.add_argument('--realsnorm', action='store_true', help='Turns on real spectral normalization')
-    parser.add_argument('--L', type=float, default=1.0, help='Lipschitz constant of network')
+    parser.add_argument('--L', type=float, default=0.76, help='Lipschitz constant of network')
     # parser.add_argument('--mag-only', action='store_true', help='denoise mag only')
     parser.add_argument('--denoiser-mode', type=str, default='2-chan')
     parser.add_argument('--rotation-angles', type=int, default=0, help='number of rotation angles to try (<1 gives no rotation)')
     parser.add_argument('--normalize', type=str, default='std', help='normalization type (None "std", "constant", "kspace", or "max")')
-    parser.add_argument('--std', type=float, default=0.01, help='standard dev of denoiser')
-    parser.add_argument('--image-size', default=384, type=int, help='image size (this is bigger than 320x320)')
+    parser.add_argument('--std', type=float, default=0.03, help='standard dev of denoiser')
+    parser.add_argument('--image-size', default=320, type=int, help='image size (this is bigger than 320x320)')
     parser.add_argument('--batch-size', default=32, type=int, help='Mini batch size') #Ted used 16
     parser.add_argument('--patch-size', default=64, type=int, help='training patch size')
     parser.add_argument('--val-patch-size', default=384, type=int, help='val patch size')
-    parser.add_argument('--num-epochs', type=int, default=40, help='Number of training epochs') #old value 300
+    parser.add_argument('--num-epochs', type=int, default=150, help='Number of training epochs') #old value 300
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate') # Ted's default was 1e-3
     parser.add_argument('--lr-step-size', type=int, default=20,
                         help='Period of learning rate decay') #old value 100
