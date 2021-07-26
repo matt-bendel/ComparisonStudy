@@ -63,6 +63,11 @@ def best_rotate(x, num_angles):
 
     return x_rotate, best_angle
 
+def complex_mult(x,y):
+    real_z = x[...,0]*y[...,0] - x[...,1]*y[...,1]
+    imag_z = x[...,0]*y[...,1] + x[...,1]*y[...,0]
+    return torch.stack([real_z,imag_z], dim=real_z.dim())
+
 def to_tensor(data: np.ndarray) -> torch.Tensor:
     """
     Convert numpy array to PyTorch tensor.

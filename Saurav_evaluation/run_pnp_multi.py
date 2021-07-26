@@ -16,9 +16,10 @@ from collections import defaultdict
 import numpy as np
 import torch
 
-from torch.utils.data import DataLoader
-
 import matplotlib
+
+from utils.fastmri.utils import generate_gro_mask
+
 matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 
@@ -34,7 +35,7 @@ from eval import nmse, psnr
 from skimage.measure import compare_ssim
 
 from utils.fastmri.data import transforms
-from utils.fastmri.data.mri_data import SelectiveSliceData
+from utils.fastmri.data.mri_data import SliceDataset
 
 from utils.fastmri.models.PnP.train_denoiser_multicoil_brain import load_model
 from utils import fastmri
@@ -44,6 +45,10 @@ import PIL
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def nmse_tensor(gt, pred):
+    """ Compute Normalized Mean Squared Error (NMSE) """
+    return torch.norm(gt - pred) ** 2 / torch.norm(gt) ** 2
 
 def optimal_scale(target, recons, return_alpha=False):
     if recons.ndim == 3:
@@ -109,24 +114,11 @@ class DataTransform:
 
 def create_data_loader(args):
     # select subset
-    use_mid_slices=args.use_mid_slices
-    fat_supress=None
-    strength_3T=None
-
-    if args.scanner_mode is not None:
-        fat_supress = (args.scanner_mode == "PDFS")
-    if args.scanner_strength is not None:
-        strength_3T = (args.scanner_strength >=2.2)
-
-    data_set = SelectiveSliceData(
-        root=args.data_path / f'{args.challenge}_val',
+    data_set = SliceDataset(
+        sample_rate=1,
+        root=args.data_path / f'singlecoil_test',
         transform=DataTransform(args),
-        challenge=args.challenge,
-        sample_rate=args.sample_rate,
-        use_mid_slices=use_mid_slices,
-        fat_supress=fat_supress,
-        strength_3T=strength_3T,
-        restrict_size=True,
+        challenge='singlecoil',
     )
     return data_set
 
@@ -138,9 +130,7 @@ def denoiser(noisy,model,args):
     if (args.normalize == 'max') or (args.normalize == 'std'):
         noisy, scale = transforms.denoiser_normalize(noisy, is_complex=True, use_std=args.normalize=='std')
     elif args.normalize=='constant':
-        scale = 0.0012
-        if args.espirit_cal:
-            scale = scale/15
+        scale = 0.0016
         noisy = noisy*(1/scale)
     else:
         scale = 1
@@ -169,154 +159,6 @@ def denoiser(noisy,model,args):
     denoised_image = transforms.polar_to_rect(transforms.complex_abs(denoised_image), transforms.phase(denoised_image)-rot_angle)
 
     return denoised_image
-    
-def admm(y, mri, model, args, target):
-    with torch.no_grad():
-        # scale kspace
-        if args.normalize == 'kspace':
-            k_scale = torch.sqrt(torch.sum(y**2))
-            y = y/k_scale
-            target = target/k_scale.cpu().numpy()
-            # scale beta parameter
-            beta = args.beta / (k_scale**2)
-        else:
-            beta = args.beta
-
-        Ht_y = mri.H(y)
-        x = Ht_y*0
-        v = x
-        u = x*0
-        
-        outer_iters = args.num_iters
-        inner_iters = args.inner_iters
-        
-        pnp = (args.algorithm == 'pnp-admm')
-        inner_denoiser_iters = args.inner_denoiser_iters
-        
-        a_nmse = []
-
-
-        # pl.ImagePlot(transforms.center_crop(transforms.complex_abs(Ht_y), (args.resolution, args.resolution)).cpu().numpy())
-
-        for k in range(outer_iters):
-    
-        # Part1 of the ADMM, approximates the solution of:
-        # x = argmin_z 1/(2sigma^2)||Hz-y||_2^2 + 0.5*beta||z - v + u||_2^2
-
-            for j in range(inner_iters):
-                b = Ht_y + beta*(v - u)
-                A_x_est = mri.H(mri.A(x)) + beta*x
-                res = b - A_x_est
-                a_res = mri.H(mri.A(res)) + beta*res
-                mu_opt = torch.mean(res*res)/torch.mean(res*a_res)
-                #num = torch.sum(transforms.complex_mult(res, transforms.complex_conj(res))[..., 0])
-                #den = torch.sum(transforms.complex_mult(a_res, transforms.complex_conj(res))[..., 0])
-                #mu_opt = num / den
-                x = x + mu_opt*res
-
-            if pnp:
-                v = denoiser(x + u, model, args)
-            else:
-                # Part2 of the ADMM, approximates the solution of
-                # v = argmin_z lambda*z'*(z-denoiser(z)) +  0.5*beta||z - x - u||_2^2
-                # using gradient descent
-                for j in range(inner_denoiser_iters):
-                    f_v = denoiser(v, model, args)
-                    v = (beta*(x + u) + args.lamda*f_v)/(args.lamda + beta)
-    
-            # Part3 of the ADMM, update the dual variable
-            u = u + x - v
-        
-            # Find psnr at every iteration
-            x_crop = transforms.center_crop(transforms.complex_abs(x).cpu().numpy(), (args.resolution, args.resolution))
-            nmse_step = nmse(target, x_crop)
-            a_nmse.append(nmse_step)
-        # unnormalize
-        if args.normalize=='kspace':
-            x = x*k_scale
-    return x, a_nmse
-
-
-def gd_opt(y, mri, args, target):
-    with torch.no_grad():
-        # scale kspace
-
-        Ht_y = mri.H(y)
-        x = Ht_y*0
-
-        outer_iters = args.num_iters
-
-        a_nmse = []
-        a_loss = []
-
-        for k in range(outer_iters):
-            Ax = mri.A(x)
-            a_loss.append(torch.sum((Ax - y)**2).item())
-            b = Ht_y
-            A_x_est = mri.H(Ax)
-            res = b - A_x_est
-            a_res = mri.H(mri.A(res))
-            # mu_opt = torch.mean(res * res) / torch.mean(res * a_res)
-            num = torch.sum(transforms.complex_mult(res, transforms.complex_conj(res))[...,0])
-            den = torch.sum(transforms.complex_mult(a_res, transforms.complex_conj(res))[...,0])
-            mu_opt = num / den
-            x = x + mu_opt * res
-
-            # Find psnr at every iteration
-            x_crop = transforms.center_crop(transforms.complex_abs(x).cpu().numpy(), (args.resolution, args.resolution))
-            if args.optimal_scaling:
-                x_crop = optimal_scale(target, x_crop)
-            nmse_step = nmse(target, x_crop)
-            a_nmse.append(nmse_step)
-
-        if args.debug:
-            plt.loglog(a_loss)
-            plt.show()
-    return x, a_nmse
-
-
-def dumb_gd(y, mri, args, target):
-    with torch.no_grad():
-
-        Ht_y = mri.H(y)
-        x = Ht_y * 0
-
-        y1 = x
-        t1 = 1
-
-        # Compute step size
-        if args.step_size is None:
-            # Power iteration to find L
-            L = find_spec_rad(mri, 20, x)
-            mu = 1 / L
-            print(mu)
-        else:
-            mu = args.step_size
-
-        outer_iters = args.num_iters
-
-        a_nmse = []
-
-        # pl.ImagePlot(transforms.center_crop(transforms.complex_abs(Ht_y), (args.resolution, args.resolution)).cpu().numpy())
-
-        for k in range(outer_iters):
-            t0 = t1
-            # Part1 of the ADMM, approximates the solution of:
-            # x = argmin_z 1/(2sigma^2)||Hz-y||_2^2 + 0.5*beta||z - v + u||_2^2
-            y0 = y1
-            y1 = x - mu*(mri.H(mri.A(x))- Ht_y)
-
-            if args.accel:
-                t1 = (1 + np.sqrt(1 + 4*t0**2))/2
-            else:
-                t1 = 1
-            x = y1 + ((t0-1)/t1)* (y1 - y0)
-
-            # Find psnr at every iteration
-            x_crop = transforms.center_crop(transforms.complex_abs(x).cpu().numpy(), (args.resolution, args.resolution))
-            nmse_step = nmse(target, x_crop)
-            a_nmse.append(nmse_step)
-    return x, a_nmse
 
 def find_spec_rad(mri,steps, x):
     # init x
@@ -332,65 +174,88 @@ def find_spec_rad(mri,steps, x):
 
     return spec_rad
 
-def pnp_pg(y,mri,model,args, target):
+
+def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, sens_map_foo):
+    #     print('Running generic-2 PnP-PDS')
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+
+    EYE = torch.ones(8, args.image_size, args.image_size, 2)
+    EYE = EYE.to(device)
+
+    sens_map_zero_count = 0
+    AA = torch.zeros(args.image_size, args.image_size)
+    AA_ones = torch.zeros(args.image_size, args.image_size) + 1
+    for i in range(320):
+        for j in range(320):
+            if np.sum(np.abs(sens_map_foo[i, j, :])) == 0:
+                sens_map_zero_count = sens_map_zero_count + 1
+                AA[i, j] = 1
+                AA_ones[i, j] = 0
+    AA_ones = AA_ones.to(device)
+
+    roo = 6.3688e-12
+
     with torch.no_grad():
+        outer_iters = max_iter
 
-        Ht_y = mri.H(y)
-        x = Ht_y
-
-        # Compute step size
-        if args.step_size is None:
-            # Power iteration to find L
-            L = find_spec_rad(mri,20, x)
-            mu = 2/L
-        else:
-            mu = args.step_size
-
-        y1 = x
-        t1 = 1
         a_nmse = []
-        for k in range(args.num_iters):
-            t0 = t1
-            y0 = y1
-            # perform gradient step
-            # z = x - mu*mri.H(mri.A(x)-y)
-            z = x - mu * (mri.H(mri.A(x)) - Ht_y)
-            # perform denoising
-            y1 = (1-args.relaxation)*denoiser(z, model, args)+args.relaxation*z
-            if args.accel:
-                t1 = (1 + np.sqrt(1 + 4*t0**2))/2
-            else:
-                t1 = 1
-            x = y1 + ((t0-1)/t1)* (y1 - y0)
-            # x_crop = transforms.center_crop(transforms.complex_abs(x).cpu().numpy(), (args.resolution, args.resolution))
-            z_crop = transforms.center_crop(transforms.complex_abs(z).cpu().numpy(), (args.resolution, args.resolution))
-            # nmse_step = nmse(target, x_crop)
-            nmse_step = nmse(target, z_crop)
-            a_nmse.append(nmse_step)
-        return x, a_nmse
+        a_rSNR = []
+        gamma_1_log = []
+        gamma_2_log = []
+        res_norm_log = []
+        required_res_norm_log = []
+        input_RMSE = []
+        output_RMSE = []
 
-def red_gd(y,mri,model,args, target):
-    with torch.no_grad():
-        x = mri.H(y)
-        y1 = x
-        t1 = 1
-        a_nmse = []
-        for k in range(args.num_iters):
-            t0 = t1
-            y0 = y1
-            # perform denoising
-            fx = denoiser(x, model, args)
-            # perform gradient step
-            y1 = x - args.step_size*(mri.H(mri.A(x)-y) + args.lamda*(x-fx))
-            if args.accel:
-                t1 = (1 + np.sqrt(1 + 4*t0**2))/2
-            else:
-                t1 = 1
-            x = y1 + ((t0-1)/t1)* (y1 - y0)
-            x_crop = transforms.center_crop(transforms.complex_abs(x).cpu().numpy(), (args.resolution, args.resolution))
-            nmse_step = nmse(target, x_crop)
+        x = 1 * mri.H(y)
+        z = 0 * x
+
+        x_crop = transforms.complex_abs(x)
+        nmse_step = nmse_tensor(target[0:320, 0:320], x_crop[0:320, 0:320])
+        a_nmse.append(nmse_step)
+
+        L = find_spec_rad(mri, 100, x)
+
+        gamma_1 = gamma_1_input * roo
+
+        gamma_2 = (1 / L) * ((1 / gamma_1))
+
+        for k in range(outer_iters):
+            yoda = 1
+            b1 = x - (gamma_1 * mri.H(z))
+
+            x_new = yoda * denoiser(b1, model, args) + (1 - yoda) * x
+
+            x_hat = x_new + 1 * (x_new - x)
+
+            z = (EYE - (1 / ((((1 / roo) * EYE) / gamma_2) + EYE))) * z + (
+                        1 / ((((1 / roo) * EYE) / gamma_2) + EYE)) * ((1 / roo) * EYE) * (mri.A(x_hat) - y)
+
+            x = x_new
+
+            gamma_1_log.append(gamma_1)
+            gamma_2_log.append(gamma_2)
+
+            boo = mri.A(x) - y
+
+            resnorm_recov = torch.sqrt(torch.sum(boo ** 2))
+
+            x_crop = transforms.complex_abs(x)
+
+            target_2 = target
+
+            target_3 = target_2 * AA_ones
+            x_crop_3 = x_crop * AA_ones
+            rSNR_step = (1 / nmse_tensor(target_3[0:320, 0:320], x_crop_3[0:320, 0:320, 0:320, 0:320]))
+            nmse_step = nmse_tensor(target_3[0:320, 0:320], x_crop_3[0:320, 0:320, 0:320, 0:320])
+
             a_nmse.append(nmse_step)
-        return x, a_nmse
+            a_rSNR.append(rSNR_step)
+
+            res_norm_log.append(resnorm_recov)
+
+    return x, a_nmse, a_rSNR, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE
 
 class A_mri:
     def __init__(self,sens_maps,mask):
@@ -400,14 +265,14 @@ class A_mri:
     def A(self,x):
         x = x[None, ...]
         y = transforms.complex_mult(x,self.sens_maps)
-        y_fft = transforms.fft2(y)
+        y_fft = fastmri.fft2c(y)
         out = self.mask * y_fft
         return out
 
     def H(self,x):
         y = self.mask*x
-        y_ifft = transforms.ifft2(y)
-        out = torch.sum(transforms.complex_mult(y_ifft,transforms.complex_conj(self.sens_maps)), dim=0)
+        y_ifft = fastmri.ifft2c(y)
+        out = torch.sum(transforms.complex_mult(y_ifft,fastmri.complex_conj(self.sens_maps)), dim=0)
         return out
         
 
@@ -417,54 +282,38 @@ def cs_pnp(args, model, kspace, mask, sens, target):
     reconstruction algorithm using the BART toolkit.
     """
     # mask = mask.permute(0,2,1)
-    kspace_np = tensor_to_complex_np(kspace)
+    masked_kspace = tensor_to_complex_np(kspace)
+    ESPIRiT_tresh = 0.02  # old 0.02
+    ESPIRiT_crop = 0.96  # old 0.96;
+    ESPIRiT_width_mask = 32
+    device = sp.Device(0)
+
+    sens_maps = mr.app.EspiritCalib(masked_kspace, calib_width=ESPIRiT_width_mask, thresh=ESPIRiT_tresh, kernel_width=6,
+                                    crop=ESPIRiT_crop, device=device, show_pbar=False).run()
+
+    sens_maps = sp.to_device(sens_maps, -1)
+    sens_map_foo = np.zeros((args.resolution, args.resolution, 8)).astype(np.complex)
     # mask = mask.cpu().numpy()
 
-    if args.espirit_cal:
-        # call Espirit
-        device=sp.Device(0)
-        sens_maps = mr.app.EspiritCalib(kspace_np,device=device).run()
-        sens_maps = sp.to_device(sens_maps, -1)
-        if args.debug:
-            real_sens_maps_pwr = np.sum(np.abs(np.real(sens_maps))**2)
-            imag_sens_maps_pwr = np.sum(np.abs(np.imag(sens_maps))**2)
-            print("sens maps power (real/imag): {} / {}".format(real_sens_maps_pwr, imag_sens_maps_pwr))
-        sens_maps = transforms.to_tensor(sens_maps.astype('complex64'))
-    else:
-        sens_maps = sens
+    sens_maps = sens
 
     # handle pytorch device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     sens_maps = sens_maps.to(device)
     mask = mask.to(device)
+    masked_kspace.to(device)
 
     mri = A_mri(sens_maps, mask)
-    
-    # Use PnP-PG to reconstruct the image
-    kspace = kspace.to(device)
 
-    if args.algorithm == 'pnp-pg':
-        pred, a_nmse = pnp_pg(kspace, mri, model, args, target)
-
-    elif args.algorithm == 'red-gd':
-        pred, a_nmse = red_gd(kspace, mri, model, args, target)
-        
-    elif (args.algorithm == 'red-admm') or (args.algorithm == 'pnp-admm'):
-        pred, a_nmse = admm(kspace, mri, model, args, target)
-    elif (args.algorithm =='dumb-gd'):
-        pred, a_nmse = dumb_gd(kspace,mri,args, target)
-    elif (args.algorithm == 'gd-opt'):
-        pred, a_nmse = gd_opt(kspace, mri, args, target)
-
-
-
+    pred, a_nmse, a_rSNR, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
+        masked_kspace, model, args, mri, target, 50, 18, sens_map_foo)
 
     if args.debug:
         plt.loglog(range(args.num_iters), a_nmse)
         plt.xlabel('iter')
         plt.ylabel('nmse')
         plt.grid()
-        plt.show()
+        plt.savefig('test.png')
 
         # x_bp = transforms.center_crop(transforms.complex_abs(mri.H(kspace)),(args.resolution, args.resolution)).cpu().numpy()
         # plt.imshow(x_bp, origin='lower', cmap='gray')
@@ -474,12 +323,6 @@ def cs_pnp(args, model, kspace, mask, sens, target):
         # plt.show()
 
     pred = transforms.complex_abs(pred).cpu().numpy()
-
-    pred = transforms.center_crop(pred, (args.resolution, args.resolution))
-
-    if args.rss_target and (not args.espirit_cal):
-        sens_np = tensor_to_complex_np(transforms.complex_center_crop(sens_maps, (args.resolution, args.resolution)).cpu())
-        pred = gt_to_rss(pred, sens_np)
 
     if args.optimal_scaling:
         pred, alpha = optimal_scale(target, pred, return_alpha=True)
@@ -611,7 +454,8 @@ def save_outputs(outputs, output_path):
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument('--output-path', type=pathlib.Path, default=None,
+    parser.add_argument('--data_path', type=pathlib.Path, default='/storage/fastMRI_brain/data/Matt_preprocessed_data/T2')
+    parser.add_argument('--output-path', type=pathlib.Path, default='out',
                         help='Path to save the reconstructions to')
     parser.add_argument('--snr', type=float, default=None, help='measurement noise')
     parser.add_argument('--project', default=False, action='store_true', help='replace loss prox with projection operator')
@@ -629,8 +473,8 @@ if __name__ == '__main__':
     parser.add_argument('--beta', type=float, default=0.001, help='ADMM Penalty parameter')
     parser.add_argument('--device', type=int, default=0, help='Cuda device (-1 for CPU)')
     parser.add_argument('--denoiser-mode', type=str, default='2-chan', help='Denoiser mode (mag, real_imag, 2-chan)')
-    parser.add_argument('--checkpoint', type=str, default=None, help='Path to an existing checkpoint.')
-    parser.add_argument("--debug", default=False, action="store_true" , help="Debug mode")
+    parser.add_argument('--checkpoint', type=str, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/best_model.pt', help='Path to an existing checkpoint.')
+    parser.add_argument("--debug", default=True, action="store_true" , help="Debug mode")
     parser.add_argument("--test-idx", type=int, default=0, help="test index image for debug mode")
     parser.add_argument("--natural-image", default=False, action="store_true", help="Uses a pretrained DnCNN rather than a custom trained network")
     parser.add_argument("--normalize", type=str, default=None, help="Type of normalization going into denoiser (None, 'max', 'std')")
