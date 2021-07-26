@@ -110,7 +110,7 @@ class DataTransform:
     Data Transformer for training U-Net models.
     """
 
-    def __init__(self, noise_std, resolution, mag_only=False, normalize=None, rotation_angles=0,random_crop=True, rss_target=False, train_data=True, image_size = 384):
+    def __init__(self, noise_std, resolution=None, mag_only=False, normalize=None, rotation_angles=0,random_crop=True, rss_target=False, train_data=True, image_size = 384):
         """
         Args:
             mask_func (common.subsample.MaskFunc): A function that can create a mask of
@@ -211,13 +211,13 @@ def create_datasets(args):
 
     train_data = SliceDataset(
         root=args.data_path / f'singlecoil_train',
-        transform=DataTransform(args),
+        transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True, rss_target=args.rss_target, train_data=True, image_size = 384),
         sample_rate=1.0,
         challenge='singlecoil',
     )
     dev_data = SliceDataset(
         root=args.data_path / f'singlecoil_val',
-        transform=DataTransform(args),
+        transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode=='mag', normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False, rss_target=args.rss_target, train_data=False, image_size = 384),
         sample_rate=1.0,
         challenge='singlecoil',
     )
