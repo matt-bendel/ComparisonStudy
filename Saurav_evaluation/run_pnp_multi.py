@@ -20,7 +20,6 @@ import matplotlib
 
 from utils.fastmri.utils import generate_gro_mask
 
-matplotlib.use('TKAgg')
 import matplotlib.pyplot as plt
 
 
@@ -32,7 +31,6 @@ from utils.fastmri import utils
 from argparse import ArgumentParser
 from utils.fastmri import tensor_to_complex_np
 from eval import nmse, psnr
-from skimage.measure import compare_ssim
 
 from utils.fastmri.data import transforms
 from utils.fastmri.data.mri_data import SliceDataset
@@ -387,9 +385,8 @@ def main(args):
         NMSE = nmse(target, prediction)
         rSNR = 10*np.log10(1/NMSE)
         PSNR = psnr(target, prediction)
-        SSIM = compare_ssim(target, prediction, data_range=target.max())
         pred_clipped = prediction/np.max(prediction)
-        metrics = [NMSE, PSNR, SSIM, rSNR]
+        metrics = [NMSE, PSNR, rSNR]
         a_metrics.append(metrics)
         print('NMSE: {0:.4g}'.format(NMSE))
         if args.debug:
@@ -426,7 +423,7 @@ def main(args):
     logging.info(f'Run Time = {time_taken:}s')
     # Print metrics
     a_metrics = np.array(a_metrics)
-    a_names = ['NMSE','PSNR','SSIM','rSNR']
+    a_names = ['NMSE','PSNR','rSNR']
     mean_metrics = np.mean(a_metrics, axis=0)
     std_metrics = np.std(a_metrics, axis=0)
     
