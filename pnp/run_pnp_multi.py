@@ -290,8 +290,9 @@ def cs_pnp(args, model, kspace, mask, sens, target):
     mri = A_mri(sens_maps, mask)
     target = target.to(device)
 
-    pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
-        masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
+    pred, a_nmse = admm(masked_kspace,model,args,target)
+    # pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
+    #     masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
 
     if args.debug:
         plt.plot(range(50), a_nmse)
@@ -328,6 +329,72 @@ args:
 def gt_to_rss(x_gt, sens_maps):
     rss_map = np.sqrt(np.sum(np.abs(sens_maps)**2,axis=-3))
     return x_gt*rss_map
+
+
+def admm(y, model, args, target):
+    with torch.no_grad():
+        # scale kspace
+        if args.normalize == 'kspace':
+            k_scale = torch.sqrt(torch.sum(y ** 2))
+            y = y / k_scale
+            target = target / k_scale.cpu().numpy()
+            # scale beta parameter
+            beta = args.beta / (k_scale ** 2)
+        else:
+            beta = args.beta
+
+        Ht_y = fastmri.ifft2c(y)
+        x = Ht_y * 0
+        v = x
+        u = x * 0
+
+        outer_iters = args.num_iters
+        inner_iters = args.inner_iters
+
+        pnp = True
+        inner_denoiser_iters = args.inner_denoiser_iters
+
+        a_nmse = []
+
+        # pl.ImagePlot(transforms.center_crop(transforms.complex_abs(Ht_y), (args.resolution, args.resolution)).cpu().numpy())
+
+        for k in range(outer_iters):
+
+            # Part1 of the ADMM, approximates the solution of:
+            # x = argmin_z 1/(2sigma^2)||Hz-y||_2^2 + 0.5*beta||z - v + u||_2^2
+
+            for j in range(inner_iters):
+                b = Ht_y + beta * (v - u)
+                A_x_est = fastmri.ifft2c(fastmri.fft2c(x)) + beta * x
+                res = b - A_x_est
+                a_res = fastmri.ifft2c(fastmri.fft2c(res)) + beta * res
+                mu_opt = torch.mean(res * res) / torch.mean(res * a_res)
+                # num = torch.sum(transforms.complex_mult(res, transforms.complex_conj(res))[..., 0])
+                # den = torch.sum(transforms.complex_mult(a_res, transforms.complex_conj(res))[..., 0])
+                # mu_opt = num / den
+                x = x + mu_opt * res
+
+            if pnp:
+                v = denoiser(x + u, model, args)
+            else:
+                # Part2 of the ADMM, approximates the solution of
+                # v = argmin_z lambda*z'*(z-denoiser(z)) +  0.5*beta||z - x - u||_2^2
+                # using gradient descent
+                for j in range(inner_denoiser_iters):
+                    f_v = denoiser(v, model, args)
+                    v = (beta * (x + u) + args.lamda * f_v) / (args.lamda + beta)
+
+            # Part3 of the ADMM, update the dual variable
+            u = u + x - v
+
+            # Find psnr at every iteration
+            x_crop = transforms.center_crop(transforms.complex_abs(x).cpu().numpy(), (320, 320))
+            nmse_step = psnr_2(target, x_crop)
+            a_nmse.append(nmse_step)
+        # unnormalize
+        if args.normalize == 'kspace':
+            x = x * k_scale
+    return x, a_nmse
 
 def main(args):
     # with multiprocessing.Pool(20) as pool:
