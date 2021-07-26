@@ -36,13 +36,18 @@ from utils import fastmri
 
 import scipy.misc
 import PIL
+from skimage.metrics import peak_signal_noise_ratio, structural_similarity
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def nmse_tensor(gt, pred):
+def psnr_2(gt, pred):
     """ Compute Normalized Mean Squared Error (NMSE) """
-    return torch.norm(gt - pred) ** 2 / torch.norm(gt) ** 2
+    gt = gt.cpu().numpy()
+    pred = pred.cpu().numpy()
+    #plt.imshow(pred,cmap='gray')
+    #plt.savefig('pred.png')
+    return peak_signal_noise_ratio(gt, pred, data_range=gt.max())
 
 def optimal_scale(target, recons, return_alpha=False):
     if recons.ndim == 3:
@@ -81,7 +86,7 @@ class DataTransform:
         if args.mask_path is not None:
             self.mask = torch.load(args.mask_path)
 
-    def __call__(self, kspace, target, attrs, fname, slice):
+    def __call__(self, kspace, mk, target, attrs, fname, slice):
         """
         Args:
             kspace (numpy.array): Input k-space of shape (num_coils, rows, cols, 2) for multi-coil
@@ -98,7 +103,8 @@ class DataTransform:
         """
 
         kspace = transforms.to_tensor(kspace)
-        sens = mr.app.EspiritCalib(tensor_to_complex_np(kspace)).run()
+        #sens = mr.app.EspiritCalib(tensor_to_complex_np(kspace)).run()
+        sens = np.ones((320, 320, 2))
         mask = get_gro_mask(kspace.shape)
         masked_kspace = (kspace * mask) + 0.0
 
@@ -161,10 +167,9 @@ def find_spec_rad(mri,steps, x):
 
     # power iteration
     for i in range(steps):
-        x = mri.H(mri.A(x))
+        x = fastmri.ifft2c(fastmri.fft2c(x))
         spec_rad = torch.sqrt(torch.sum(torch.abs(x)**2))
         x = x/spec_rad
-
 
     return spec_rad
 
@@ -172,20 +177,21 @@ def find_spec_rad(mri,steps, x):
 def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, sens_map_foo):
     #     print('Running generic-2 PnP-PDS')
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda")
 
-    EYE = torch.ones(8, args.image_size, args.image_size, 2)
+    EYE = torch.ones(320, 320, 2)
     EYE = EYE.to(device)
 
     sens_map_zero_count = 0
-    AA = torch.zeros(args.image_size, args.image_size)
-    AA_ones = torch.zeros(args.image_size, args.image_size) + 1
+    AA = torch.zeros(320, 320)
+    AA_ones = torch.zeros(320, 320) + 1
     for i in range(320):
         for j in range(320):
-            if np.sum(np.abs(sens_map_foo[i, j, :])) == 0:
+            if np.sum(np.abs(sens_map_foo[i, j])) == 0:
                 sens_map_zero_count = sens_map_zero_count + 1
                 AA[i, j] = 1
                 AA_ones[i, j] = 0
+    AA = AA.to(device)
     AA_ones = AA_ones.to(device)
 
     roo = 6.3688e-12
@@ -202,12 +208,10 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, sens_map_fo
         input_RMSE = []
         output_RMSE = []
 
-        x = 1 * mri.H(y)
+        x = fastmri.ifft2c(y)
         z = 0 * x
 
         x_crop = transforms.complex_abs(x)
-        nmse_step = nmse_tensor(target[0:320, 0:320], x_crop[0:320, 0:320])
-        a_nmse.append(nmse_step)
 
         L = find_spec_rad(mri, 100, x)
 
@@ -217,39 +221,35 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, sens_map_fo
 
         for k in range(outer_iters):
             yoda = 1
-            b1 = x - (gamma_1 * mri.H(z))
+            b1 = x - (gamma_1 * fastmri.ifft2c(z))
 
             x_new = yoda * denoiser(b1, model, args) + (1 - yoda) * x
 
             x_hat = x_new + 1 * (x_new - x)
 
             z = (EYE - (1 / ((((1 / roo) * EYE) / gamma_2) + EYE))) * z + (
-                        1 / ((((1 / roo) * EYE) / gamma_2) + EYE)) * ((1 / roo) * EYE) * (mri.A(x_hat) - y)
+                        1 / ((((1 / roo) * EYE) / gamma_2) + EYE)) * ((1 / roo) * EYE) * (fastmri.fft2c(x_hat) - y)
 
             x = x_new
 
             gamma_1_log.append(gamma_1)
             gamma_2_log.append(gamma_2)
 
-            boo = mri.A(x) - y
+            boo = fastmri.fft2c(x) - y
 
             resnorm_recov = torch.sqrt(torch.sum(boo ** 2))
 
             x_crop = transforms.complex_abs(x)
+            plt.imshow(x_crop.cpu().numpy(),cmap='gray')
+            plt.savefig('pred.png')
 
-            target_2 = target
-
-            target_3 = target_2 * AA_ones
-            x_crop_3 = x_crop * AA_ones
-            rSNR_step = (1 / nmse_tensor(target_3[0:320, 0:320], x_crop_3[0:320, 0:320, 0:320, 0:320]))
-            nmse_step = nmse_tensor(target_3[0:320, 0:320], x_crop_3[0:320, 0:320, 0:320, 0:320])
-
+            nmse_step = psnr_2(target, x_crop)
+            print(nmse_step)
             a_nmse.append(nmse_step)
-            a_rSNR.append(rSNR_step)
 
             res_norm_log.append(resnorm_recov)
 
-    return x, a_nmse, a_rSNR, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE
+    return x, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE
 
 class A_mri:
     def __init__(self,sens_maps,mask):
@@ -277,33 +277,24 @@ def cs_pnp(args, model, kspace, mask, sens, target):
     """
     # mask = mask.permute(0,2,1)
     masked_kspace = tensor_to_complex_np(kspace)
-    ESPIRiT_tresh = 0.02  # old 0.02
-    ESPIRiT_crop = 0.96  # old 0.96;
-    ESPIRiT_width_mask = 32
-    device = sp.Device(0)
 
-    sens_maps = mr.app.EspiritCalib(masked_kspace, calib_width=ESPIRiT_width_mask, thresh=ESPIRiT_tresh, kernel_width=6,
-                                    crop=ESPIRiT_crop, device=device, show_pbar=False).run()
-
-    sens_maps = sp.to_device(sens_maps, -1)
-    sens_map_foo = np.zeros((args.resolution, args.resolution, 8)).astype(np.complex)
-    # mask = mask.cpu().numpy()
-
-    sens_maps = sens
+    sens_maps = transforms.to_tensor(sens)
 
     # handle pytorch device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    sens_maps = sens_maps.to(device)
+    device = torch.device("cuda")
+    sens_maps = None
     mask = mask.to(device)
-    masked_kspace.to(device)
-
+    masked_kspace = transforms.to_tensor(masked_kspace)
+    masked_kspace = masked_kspace.to(device)
+    sens_map_foo = np.zeros((320,320)).astype(np.complex)
     mri = A_mri(sens_maps, mask)
+    target = target.to(device)
 
-    pred, a_nmse, a_rSNR, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
-        masked_kspace, model, args, mri, target, 50, 18, sens_map_foo)
+    pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
+        masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
 
     if args.debug:
-        plt.loglog(range(args.num_iters), a_nmse)
+        plt.plot(range(50), a_nmse)
         plt.xlabel('iter')
         plt.ylabel('nmse')
         plt.grid()
@@ -347,7 +338,7 @@ def main(args):
     #     save_outputs(outputs, args.output_path)
 
     # handle pytorch device
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda")
 
     # load model
     if args.checkpoint is not None:
@@ -380,46 +371,17 @@ def main(args):
         # compute metrics 
         NMSE = nmse(target, prediction)
         rSNR = 10*np.log10(1/NMSE)
-        PSNR = psnr(target, prediction)
+        #PSNR = psnr(target, prediction)
         pred_clipped = prediction/np.max(prediction)
-        metrics = [NMSE, PSNR, rSNR]
+        metrics = [NMSE, rSNR]
         a_metrics.append(metrics)
         print('NMSE: {0:.4g}'.format(NMSE))
-        if args.debug:
-            # display = np.concatenate([prediction, target], axis=1)
-            # pl.ImagePlot(display)
-            plt.imshow(prediction, origin='lower', cmap='gray')
-            plt.title('PnP reconstruction')
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
 
-            plt.imshow(target, origin='lower', cmap='gray')
-            plt.title('target')
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
-
-            error = np.abs(target-prediction)
-
-            plt.imshow(error, origin='lower', cmap='gray')
-            plt.title('error')
-            plt.xticks([])
-            plt.yticks([])
-            plt.show()
-
-            if True:
-                scipy.io.savemat('reconstruction.mat', {'recon': prediction})
-                scipy.io.savemat('target.mat', {'target':target})
-                scipy.io.savemat('error.mat', {'error':error})
-                PIL.ImageOps.flip(scipy.misc.toimage(prediction, cmin = 0.0, cmax = np.max(target))).save('pred.eps')
-                PIL.ImageOps.flip(scipy.misc.toimage(target, cmin = 0.0, cmax = np.max(target))).save('target.eps')
-                PIL.ImageOps.flip(scipy.misc.toimage(error*4, cmin = 0.0, cmax = np.max(target))).save('errorx4.eps')
     time_taken = time.perf_counter() - start_time
     logging.info(f'Run Time = {time_taken:}s')
     # Print metrics
     a_metrics = np.array(a_metrics)
-    a_names = ['NMSE','PSNR','rSNR']
+    a_names = ['NMSE','rSNR']
     mean_metrics = np.mean(a_metrics, axis=0)
     std_metrics = np.std(a_metrics, axis=0)
     
@@ -436,6 +398,7 @@ def save_outputs(outputs, output_path):
     if output_path is None:
         return
     reconstructions = defaultdict(list)
+    times = defaultdict(list)
     for fname, slice, pred in outputs:
         reconstructions[fname].append((slice, pred))
     reconstructions = {
@@ -487,10 +450,6 @@ if __name__ == '__main__':
 
     # restrict visible cuda devices
     os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
-
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
 
     data = create_data_loader(args)
     main(args)
