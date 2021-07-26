@@ -170,6 +170,11 @@ class DataTransform:
         # add zero mean noise
         image = image.float() + self.noise_std*torch.randn_like(image.float())
 
+        image, mean, std = transforms.normalize_instance(image, eps=1e-11)
+        image = image.clamp(-6, 6)
+
+        target = transforms.normalize(target, mean, std, eps=1e-11)
+        target = target.clamp(-6, 6)
         # move real/imag to channel position
         image = image.permute(2,0,1)
         target = target.permute(2,0,1)
