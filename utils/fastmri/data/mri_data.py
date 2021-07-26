@@ -104,9 +104,9 @@ class SelectiveSliceData_Train(Dataset):
         #         print(slice)
         #         print('hello')
         with h5py.File(fname, 'r') as data:
-            kspace = data['kspace'][slice]
-            target = transforms.to_tensor(data['kspace'][slice])
-            target = fastmri.complex_abs(fastmri.ifft2c(target))
+            kspace = data['kspace'][()][slice]
+            target = transforms.to_tensor(data['kspace'][()])[slice]
+            target = tensor_to_complex_np(fastmri.ifft2c(target))
             return self.transform(kspace, target, data.attrs, fname.name, slice)
 
 
@@ -190,9 +190,9 @@ class SelectiveSliceData_Val(Dataset):
         #         print(slice)
         #         print('hello')
         with h5py.File(fname, 'r') as data:
-            kspace = data['kspace'][slice]
-            target = transforms.to_tensor(data['kspace'][slice])
-            target = fastmri.complex_abs(fastmri.ifft2c(target))
+            kspace = data['kspace'][()][slice]
+            target = transforms.to_tensor(data['kspace'][()])[slice]
+            target = tensor_to_complex_np(fastmri.ifft2c(target))
             return self.transform(kspace, target, data.attrs, fname.name, slice)
 
 
