@@ -493,7 +493,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # restrict visible cuda devices
-    os.environ['CUDA_VISIBLE_DEVICES'] = str(args.device)
+    os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 
     random.seed(args.seed)
     np.random.seed(args.seed)
