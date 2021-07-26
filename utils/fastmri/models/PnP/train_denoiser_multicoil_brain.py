@@ -177,6 +177,7 @@ class DataTransform:
         # target = transforms.normalize(target, mean, std, eps=1e-11)
         # target = target.clamp(-6, 6)
         # move real/imag to channel position
+        print(image.shape)
         image = image.permute(2,0,1)
         target = target.permute(2,0,1)
         
