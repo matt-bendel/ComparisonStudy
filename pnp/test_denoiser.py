@@ -247,56 +247,11 @@ def main(args):
         model = None
 
     with h5py.open('', 'r') as hf:
-        kspace = hf['kspace'][()][8]
+        kspace = transforms.to_tensor(hf['kspace'][()])[8]
         complex_image = fastmri.ifft2c(kspace)
-        noisy = complex_image + 0.2 *
-        denoiser(noisy, model, args)
-
-    for i in test_array:
-        # print('Test ' +str(i)+ ' of ' + str(len(test_array)), end='\r')
-        print('Test ' + str(i) + ' of ' + str(len(test_array)))
-        masked_kspace, mask, sens, target, fname, slice = data[i]
-        prediction = cs_pnp(args, model, masked_kspace, mask, sens, target)
-        outputs.append([fname, slice, prediction])
-        # compute metrics
-        NMSE = nmse(target, prediction)
-        rSNR = 10 * np.log10(1 / NMSE)
-        # PSNR = psnr(target, prediction)
-        pred_clipped = prediction / np.max(prediction)
-        metrics = [NMSE, rSNR]
-        a_metrics.append(metrics)
-        print('NMSE: {0:.4g}'.format(NMSE))
-
-    time_taken = time.perf_counter() - start_time
-    logging.info(f'Run Time = {time_taken:}s')
-    # Print metrics
-    a_metrics = np.array(a_metrics)
-    a_names = ['NMSE', 'rSNR']
-    mean_metrics = np.mean(a_metrics, axis=0)
-    std_metrics = np.std(a_metrics, axis=0)
-
-    for i in range(len(a_names)):
-        print(a_names[i] + ': ' + str(mean_metrics[i]) + ' +/- ' + str(2 * std_metrics[i]))
-
-    save_outputs(outputs, args.output_path)
-
-    if args.output_path is not None:
-        metric_file = args.output_path / 'metrics'
-        np.save(metric_file, a_metrics)
-
-
-def save_outputs(outputs, output_path):
-    if output_path is None:
-        return
-    reconstructions = defaultdict(list)
-    times = defaultdict(list)
-    for fname, slice, pred in outputs:
-        reconstructions[fname].append((slice, pred))
-    reconstructions = {
-        fname: np.stack([pred for _, pred in sorted(slice_preds)])
-        for fname, slice_preds in reconstructions.items()
-    }
-    utils.save_reconstructions(reconstructions, output_path)
+        noisy = complex_image + 0.2 * torch.randn_like(complex_image.float())
+        denoised = denoiser(noisy, model, args)
+        print(f'PRE PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(noisy))}\nPOST PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(denoised))}')
 
 
 if __name__ == '__main__':
