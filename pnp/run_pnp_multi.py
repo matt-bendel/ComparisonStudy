@@ -101,13 +101,12 @@ class DataTransform:
                 fname (str): File name containing the current data item
                 slice (int): The index of the current slice in the volume
         """
-
         kspace = transforms.to_tensor(kspace)
         #sens = mr.app.EspiritCalib(tensor_to_complex_np(kspace)).run()
         sens = np.ones((320, 320, 2))
         mask = get_gro_mask(kspace.shape)
         masked_kspace = (kspace * mask) + 0.0
-
+        
         target = fastmri.complex_abs(fastmri.ifft2c(kspace))
 
         return masked_kspace, mask, sens, target, fname, slice
@@ -240,8 +239,6 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, sens_map_fo
             resnorm_recov = torch.sqrt(torch.sum(boo ** 2))
 
             x_crop = transforms.complex_abs(x)
-            plt.imshow(x_crop.cpu().numpy(),cmap='gray')
-            plt.savefig('pred.png')
 
             nmse_step = psnr_2(target, x_crop)
             print(nmse_step)
@@ -289,15 +286,15 @@ def cs_pnp(args, model, kspace, mask, sens, target):
     sens_map_foo = np.zeros((320,320)).astype(np.complex)
     mri = A_mri(sens_maps, mask)
     target = target.to(device)
-
+   
     pred, a_nmse = admm(masked_kspace,model,args,target)
     # pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
     #     masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
 
     if args.debug:
-        plt.plot(range(50), a_nmse)
+        plt.plot(a_nmse)
         plt.xlabel('iter')
-        plt.ylabel('nmse')
+        plt.ylabel('psnr')
         plt.grid()
         plt.savefig('test.png')
 
@@ -309,7 +306,7 @@ def cs_pnp(args, model, kspace, mask, sens, target):
         # plt.show()
 
     pred = transforms.complex_abs(pred).cpu().numpy()
-
+    exit()
     if args.optimal_scaling:
         pred, alpha = optimal_scale(target, pred, return_alpha=True)
         print(alpha)
@@ -348,7 +345,7 @@ def admm(y, model, args, target):
         v = x
         u = x * 0
 
-        outer_iters = args.num_iters
+        outer_iters = 50
         inner_iters = args.inner_iters
 
         pnp = True
@@ -388,8 +385,9 @@ def admm(y, model, args, target):
             u = u + x - v
 
             # Find psnr at every iteration
-            x_crop = transforms.center_crop(transforms.complex_abs(x).cpu().numpy(), (320, 320))
+            x_crop = transforms.center_crop(transforms.complex_abs(x), (320, 320))
             nmse_step = psnr_2(target, x_crop)
+
             a_nmse.append(nmse_step)
         # unnormalize
         if args.normalize == 'kspace':
@@ -498,7 +496,7 @@ if __name__ == '__main__':
     parser.add_argument('--denoiser-mode', type=str, default='2-chan', help='Denoiser mode (mag, real_imag, 2-chan)')
     parser.add_argument('--checkpoint', type=str, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/best_model.pt', help='Path to an existing checkpoint.')
     parser.add_argument("--debug", default=True, action="store_true" , help="Debug mode")
-    parser.add_argument("--test-idx", type=int, default=0, help="test index image for debug mode")
+    parser.add_argument("--test-idx", type=int, default=1, help="test index image for debug mode")
     parser.add_argument("--natural-image", default=False, action="store_true", help="Uses a pretrained DnCNN rather than a custom trained network")
     parser.add_argument("--normalize", type=str, default=None, help="Type of normalization going into denoiser (None, 'max', 'std')")
     parser.add_argument('--rotation-angles', type=int, default=0, help='number of rotation angles to try (<1 gives no rotation)')

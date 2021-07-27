@@ -171,11 +171,11 @@ class DataTransform:
         # add zero mean noise
         image = image.float() + self.noise_std*torch.randn_like(image.float())
 
-        image, mean, std = transforms.normalize_instance(image, eps=1e-11)
-        image = image.clamp(-6, 6)
+        #image, mean, std = transforms.normalize_instance(image, eps=1e-11)
+        #image = image.clamp(-6, 6)
         #
-        target = transforms.normalize(target, mean, std, eps=1e-11)
-        target = target.clamp(-6, 6)
+        #target = transforms.normalize(target, mean, std, eps=1e-11)
+        #target = target.clamp(-6, 6)
         # move real/imag to channel position
 
         image = image.permute(2,0,1)
@@ -472,14 +472,14 @@ def create_arg_parser():
     parser.add_argument('--direct', action='store_true', help='direct denoiser (instead of residual)')
     parser.add_argument('--loss', type=str, default='MSE')
     parser.add_argument('--num-chans', type=int, default=64, help='Number of U-Net channels')
-    parser.add_argument('--snorm', action='store_true', help='Turns on spectral normalization')
+    parser.add_argument('--snorm', default=True, action='store_true', help='Turns on spectral normalization')
     parser.add_argument('--realsnorm', action='store_true', help='Turns on real spectral normalization')
-    parser.add_argument('--L', type=float, default=0.76, help='Lipschitz constant of network')
+    parser.add_argument('--L', type=float, default=1, help='Lipschitz constant of network')
     # parser.add_argument('--mag-only', action='store_true', help='denoise mag only')
     parser.add_argument('--denoiser-mode', type=str, default='2-chan')
     parser.add_argument('--rotation-angles', type=int, default=0, help='number of rotation angles to try (<1 gives no rotation)')
     parser.add_argument('--normalize', type=str, default='std', help='normalization type (None "std", "constant", "kspace", or "max")')
-    parser.add_argument('--std', type=float, default=0.03, help='standard dev of denoiser')
+    parser.add_argument('--std', type=float, default=0.02, help='standard dev of denoiser')
     parser.add_argument('--image-size', default=320, type=int, help='image size (this is bigger than 320x320)')
     parser.add_argument('--batch-size', default=32, type=int, help='Mini batch size') #Ted used 16
     parser.add_argument('--patch-size', default=64, type=int, help='training patch size')

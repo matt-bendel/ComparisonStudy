@@ -36,7 +36,7 @@ class DataTransform:
         # self.mask_func = mask_func
         # self.which_challenge = which_challenge
         self.use_seed = use_seed
-        self.mag_only = mag_only
+        self.mag_only = False
         self.std_normalize = std_normalize
         self.noise_std = noise_std
 
@@ -53,7 +53,7 @@ class DataTransform:
 
         # move real/imag to channel position
         image = image.permute(2, 0, 1)
-        image = image.clamp(-1, 1)  # should only clamp if using std_normalization
+        #image = image.clamp(-1, 1)  # should only clamp if using std_normalization
 
         target = image
         # add zero mean noise
