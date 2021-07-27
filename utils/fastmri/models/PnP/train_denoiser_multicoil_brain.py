@@ -156,7 +156,7 @@ class DataTransform:
 #         device = torch.device(0)
         mask = get_gro_mask(kspace.shape)
         kspace = transforms.to_tensor(kspace)
-        kspace = (kspace * mask) + 0.0
+        # kspace = (kspace * mask) + 0.0
         image = fastmri.ifft2c(kspace) #(320, 320)
 
         image, rot_angle = transforms.best_rotate(image, self.num_angles)
