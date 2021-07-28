@@ -296,7 +296,7 @@ def cs_pnp(args, model, kspace, mask, sens, target):
 
     #pred, a_nmse = admm(masked_kspace,model,args,target)
     pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
-        masked_kspace, model, args, mri, target, 100, 400, sens_map_foo)
+        masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
 
     if args.debug:
         plt.plot(a_nmse)
@@ -501,7 +501,7 @@ if __name__ == '__main__':
                         help='Step size parameter')
     parser.add_argument('--lamda', type=float, default=0.01, help='Regularization weight parameter')
     parser.add_argument('--relaxation', type=float, default=0.000, help='Relaxation of denoiser in PnP-PG')
-    parser.add_argument('--beta', type=float, default=0.001, help='ADMM Penalty parameter')
+    parser.add_argument('--beta', type=float, default=0.0005, help='ADMM Penalty parameter')
     parser.add_argument('--device', type=int, default=0, help='Cuda device (-1 for CPU)')
     parser.add_argument('--denoiser-mode', type=str, default='2-chan', help='Denoiser mode (mag, real_imag, 2-chan)')
     parser.add_argument('--checkpoint', type=str, default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/best_model.pt', help='Path to an existing checkpoint.')

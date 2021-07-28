@@ -158,6 +158,16 @@ class DataTransform:
         kspace = transforms.to_tensor(kspace)
         # kspace = (kspace * mask) + 0.0
         image = fastmri.ifft2c(kspace) #(320, 320)
+
+        if self.random_crop:
+            image = transforms.complex_random_crop(image, (self.resolution, self.resolution))
+        else:
+            image = transforms.complex_center_crop(image, (self.resolution, self.resolution))
+
+        # Absolute value
+        if self.mag_only:
+            image = transforms.complex_abs(image).unsqueeze(2)
+
         image, rot_angle = transforms.best_rotate(image, self.num_angles)
 
         scale = 0.0016 # constant scale
@@ -473,15 +483,15 @@ def create_arg_parser():
     parser.add_argument('--num-chans', type=int, default=64, help='Number of U-Net channels')
     parser.add_argument('--snorm', default=True, action='store_true', help='Turns on spectral normalization')
     parser.add_argument('--realsnorm', action='store_true', help='Turns on real spectral normalization')
-    parser.add_argument('--L', type=float, default=1, help='Lipschitz constant of network')
+    parser.add_argument('--L', type=float, default=1.0, help='Lipschitz constant of network')
     # parser.add_argument('--mag-only', action='store_true', help='denoise mag only')
     parser.add_argument('--denoiser-mode', type=str, default='2-chan')
     parser.add_argument('--rotation-angles', type=int, default=0, help='number of rotation angles to try (<1 gives no rotation)')
-    parser.add_argument('--normalize', type=str, default='constant', help='normalization type (None "std", "constant", "kspace", or "max")')
+    parser.add_argument('--normalize', type=str, default='std', help='normalization type (None "std", "constant", "kspace", or "max")')
     parser.add_argument('--std', type=float, default=0.02, help='standard dev of denoiser')
     parser.add_argument('--image-size', default=320, type=int, help='image size (this is bigger than 320x320)')
     parser.add_argument('--batch-size', default=32, type=int, help='Mini batch size') #Ted used 16
-    parser.add_argument('--patch-size', default=320, type=int, help='training patch size')
+    parser.add_argument('--patch-size', default=64, type=int, help='training patch size')
     parser.add_argument('--val-patch-size', default=320, type=int, help='val patch size')
     parser.add_argument('--num-epochs', type=int, default=40, help='Number of training epochs') #old value 300
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate') # Ted's default was 1e-3
