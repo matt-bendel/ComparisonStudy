@@ -62,6 +62,7 @@ def best_rotate(x, num_angles):
             x_rotate = tmp_x
 
     return x_rotate, best_angle
+
 def complex_random_crop(data, shape):
     """
     Apply a center crop to the input image or batch of complex images.
