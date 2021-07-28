@@ -62,6 +62,29 @@ def best_rotate(x, num_angles):
             x_rotate = tmp_x
 
     return x_rotate, best_angle
+def complex_random_crop(data, shape):
+    """
+    Apply a center crop to the input image or batch of complex images.
+
+    Args:
+        data (torch.Tensor): The complex input tensor to be center cropped. It should
+            have at least 3 dimensions and the cropping is applied along dimensions
+            -3 and -2 and the last dimensions should have a size of 2.
+        shape (int, int): The output shape. The shape should be smaller than the
+            corresponding dimensions of data.
+
+    Returns:
+        torch.Tensor: The center cropped image
+    """
+    assert 0 < shape[0] <= data.shape[-3]
+    assert 0 < shape[1] <= data.shape[-2]
+    w_from = np.random.randint(0,data.shape[-3]-shape[0]+1)
+    h_from = np.random.randint(0,data.shape[-2]-shape[1]+1)
+    # w_from = (data.shape[-3] - shape[0]) // 2
+    # h_from = (data.shape[-2] - shape[1]) // 2
+    w_to = w_from + shape[0]
+    h_to = h_from + shape[1]
+    return data[..., w_from:w_to, h_from:h_to, :]
 
 def complex_mult(x,y):
     real_z = x[...,0]*y[...,0] - x[...,1]*y[...,1]
