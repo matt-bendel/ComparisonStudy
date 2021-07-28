@@ -116,16 +116,6 @@ class DataTransform:
         return masked_kspace, mask, sens, target, fname, slice
 
 
-def create_data_loader(args):
-    # select subset
-    data_set = SliceDataset(
-        sample_rate=1,
-        root=args.data_path / f'singlecoil_test',
-        transform=DataTransform(args),
-        challenge='singlecoil',
-    )
-    return data_set
-
 
 def denoiser(noisy, model, args):
     # add rotate
@@ -269,5 +259,4 @@ if __name__ == '__main__':
     # restrict visible cuda devices
     os.environ['CUDA_VISIBLE_DEVICES'] = '0,1,2,3'
 
-    data = create_data_loader(args)
     main(args)

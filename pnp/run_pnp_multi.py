@@ -45,8 +45,8 @@ def psnr_2(gt, pred):
     """ Compute Normalized Mean Squared Error (NMSE) """
     gt = gt.cpu().numpy()
     pred = pred.cpu().numpy()
-    #plt.imshow(np.abs(pred),cmap='gray')
-    #plt.savefig('pred.png')
+    plt.imshow(np.abs(pred),cmap='gray')
+    plt.savefig('pred.png')
     return peak_signal_noise_ratio(gt, pred, data_range=gt.max())
 
 def optimal_scale(target, recons, return_alpha=False):
@@ -108,8 +108,7 @@ class DataTransform:
         masked_kspace = (kspace * mask) + 0.0
         
         target = fastmri.complex_abs(fastmri.ifft2c(kspace))
-        #plt.imshow(np.abs(fastmri.complex_abs(fastmri.ifft2c(masked_kspace)).numpy()),cmap='gray')
-        #plt.savefig('zfr.png')
+
         return masked_kspace, mask, sens, target, fname, slice
 
 def create_data_loader(args):
