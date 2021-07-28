@@ -45,7 +45,7 @@ def psnr_2(gt, pred):
     """ Compute Normalized Mean Squared Error (NMSE) """
     gt = gt.cpu().numpy()
     pred = pred.cpu().numpy()
-    #plt.imshow(pred,cmap='gray')
+    #plt.imshow(np.abs(pred),cmap='gray')
     #plt.savefig('pred.png')
     return peak_signal_noise_ratio(gt, pred, data_range=gt.max())
 
@@ -108,7 +108,8 @@ class DataTransform:
         masked_kspace = (kspace * mask) + 0.0
         
         target = fastmri.complex_abs(fastmri.ifft2c(kspace))
-
+        #plt.imshow(np.abs(fastmri.complex_abs(fastmri.ifft2c(masked_kspace)).numpy()),cmap='gray')
+        #plt.savefig('zfr.png')
         return masked_kspace, mask, sens, target, fname, slice
 
 def create_data_loader(args):
@@ -132,6 +133,7 @@ def denoiser(noisy,model,args):
         scale = 0.0016
         noisy = noisy*(1/scale)
     else:
+        print('in')
         scale = 1
 
     if args.denoiser_mode=='mag':
@@ -143,6 +145,8 @@ def denoiser(noisy,model,args):
 
     elif args.denoiser_mode == '2-chan':
         # move real/imag to channel position
+        #noisy, mean, std = transforms.normalize_instance(noisy, eps=1e-11)
+        #noisy = noisy.clamp(-6, 6)
         noisy = noisy.permute(2,0,1).unsqueeze(0)
         denoised_image = model(noisy).squeeze(0).permute(1,2,0)
 
@@ -297,6 +301,9 @@ def cs_pnp(args, model, kspace, mask, sens, target):
         plt.ylabel('psnr')
         plt.grid()
         plt.savefig('test.png')
+        
+        #plt.imshow(pred, cmap='gray')
+        #plt.savefig('pred.png')
 
         # x_bp = transforms.center_crop(transforms.complex_abs(mri.H(kspace)),(args.resolution, args.resolution)).cpu().numpy()
         # plt.imshow(x_bp, origin='lower', cmap='gray')
@@ -345,7 +352,7 @@ def admm(y, model, args, target):
         v = x
         u = x * 0
 
-        outer_iters = 50
+        outer_iters = 100
         inner_iters = args.inner_iters
 
         pnp = True

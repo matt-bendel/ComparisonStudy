@@ -33,7 +33,7 @@ from utils.fastmri.data.mri_data import SliceDataset
 
 from utils.fastmri.models.PnP.train_denoiser_multicoil_brain import load_model
 from utils import fastmri
-
+import h5py
 import scipy.misc
 import PIL
 from skimage.metrics import peak_signal_noise_ratio, structural_similarity
@@ -42,12 +42,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def psnr_2(gt, pred):
+def psnr_2(gt, pred, zf=None):
     """ Compute Normalized Mean Squared Error (NMSE) """
     gt = gt.cpu().numpy()
     pred = pred.cpu().numpy()
-    # plt.imshow(pred,cmap='gray')
-    # plt.savefig('pred.png')
+    plt.imshow(gt,cmap='gray')
+    plt.savefig('other.png')
     return peak_signal_noise_ratio(gt, pred, data_range=gt.max())
 
 
@@ -135,6 +135,7 @@ def denoiser(noisy, model, args):
     if (args.normalize == 'max') or (args.normalize == 'std'):
         noisy, scale = transforms.denoiser_normalize(noisy, is_complex=True, use_std=args.normalize == 'std')
     elif args.normalize == 'constant':
+        print('in here')
         scale = 0.0016
         noisy = noisy * (1 / scale)
     else:
@@ -181,49 +182,6 @@ def find_spec_rad(mri, steps, x):
     return spec_rad
 
 
-def cs_pnp(args, model, kspace, mask, sens, target):
-    """
-    Run ESPIRIT coil sensitivity estimation and Total Variation Minimization based
-    reconstruction algorithm using the BART toolkit.
-    """
-    # mask = mask.permute(0,2,1)
-    masked_kspace = tensor_to_complex_np(kspace)
-
-    # handle pytorch device
-    device = torch.device("cuda")
-    mask = mask.to(device)
-    masked_kspace = transforms.to_tensor(masked_kspace)
-    masked_kspace = masked_kspace.to(device)
-    target = target.to(device)
-
-    # pred, a_nmse = admm(masked_kspace, model, args, target)
-    # pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
-    #     masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
-
-    if args.debug:
-        plt.plot(a_nmse)
-        plt.xlabel('iter')
-        plt.ylabel('psnr')
-        plt.grid()
-        plt.savefig('test.png')
-
-        # x_bp = transforms.center_crop(transforms.complex_abs(mri.H(kspace)),(args.resolution, args.resolution)).cpu().numpy()
-        # plt.imshow(x_bp, origin='lower', cmap='gray')
-        # plt.title('backprojection')
-        # plt.xticks([])
-        # plt.yticks([])
-        # plt.show()
-
-    pred = transforms.complex_abs(pred).cpu().numpy()
-    exit()
-    if args.optimal_scaling:
-        pred, alpha = optimal_scale(target, pred, return_alpha=True)
-        print(alpha)
-
-    # Crop the predicted image to the correct size
-    return pred
-
-
 def main(args):
     # with multiprocessing.Pool(20) as pool:
     #     start_time = time.perf_counter()
@@ -246,12 +204,15 @@ def main(args):
     else:
         model = None
 
-    with h5py.open('', 'r') as hf:
-        kspace = transforms.to_tensor(hf['kspace'][()])[8]
+    with h5py.File('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_train/file_brain_AXT2_200_2000006.h5', 'r') as hf:
+        kspace = transforms.to_tensor(hf['kspace'][()])[0]
+        zf_kspace = (kspace * get_gro_mask(kspace.shape)) + 0.0
         complex_image = fastmri.ifft2c(kspace)
-        noisy = complex_image + 0.2 * torch.randn_like(complex_image.float())
+        zfr = fastmri.ifft2c(zf_kspace)
+        print(f'TEST PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(zfr))}')
+        noisy = complex_image + 0.2 * torch.randn(complex_image.size())
         denoised = denoiser(noisy, model, args)
-        print(f'PRE PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(noisy))}\nPOST PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(denoised))}')
+        print(f'PRE PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(noisy))}\nPOST PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(denoised).detach())}')
 
 
 if __name__ == '__main__':
