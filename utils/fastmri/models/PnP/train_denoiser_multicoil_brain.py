@@ -110,7 +110,7 @@ class DataTransform:
     Data Transformer for training U-Net models.
     """
 
-    def __init__(self, noise_std, resolution=None, mag_only=False, normalize=None, rotation_angles=0,random_crop=True, rss_target=False, train_data=True, image_size = 384):
+    def __init__(self, noise_std, resolution=None, mag_only=False, normalize=None, rotation_angles=0,random_crop=True, rss_target=False, train_data=True, image_size = 320):
         """
         Args:
             mask_func (common.subsample.MaskFunc): A function that can create a mask of
@@ -158,10 +158,9 @@ class DataTransform:
         kspace = transforms.to_tensor(kspace)
         # kspace = (kspace * mask) + 0.0
         image = fastmri.ifft2c(kspace) #(320, 320)
-
         image, rot_angle = transforms.best_rotate(image, self.num_angles)
 
-        scale = 1 # constant scale
+        scale = 0.0016 # constant scale
         image = image/scale
 
         scale = torch.tensor([scale], dtype=torch.float)
@@ -180,7 +179,7 @@ class DataTransform:
 
         image = image.permute(2,0,1)
         target = target.permute(2,0,1)
-        
+
         return image, target, scale, attrs['norm'].astype(np.float32), rot_angle
 
 
@@ -478,13 +477,13 @@ def create_arg_parser():
     # parser.add_argument('--mag-only', action='store_true', help='denoise mag only')
     parser.add_argument('--denoiser-mode', type=str, default='2-chan')
     parser.add_argument('--rotation-angles', type=int, default=0, help='number of rotation angles to try (<1 gives no rotation)')
-    parser.add_argument('--normalize', type=str, default='std', help='normalization type (None "std", "constant", "kspace", or "max")')
+    parser.add_argument('--normalize', type=str, default='constant', help='normalization type (None "std", "constant", "kspace", or "max")')
     parser.add_argument('--std', type=float, default=0.02, help='standard dev of denoiser')
     parser.add_argument('--image-size', default=320, type=int, help='image size (this is bigger than 320x320)')
     parser.add_argument('--batch-size', default=32, type=int, help='Mini batch size') #Ted used 16
-    parser.add_argument('--patch-size', default=64, type=int, help='training patch size')
-    parser.add_argument('--val-patch-size', default=384, type=int, help='val patch size')
-    parser.add_argument('--num-epochs', type=int, default=100, help='Number of training epochs') #old value 300
+    parser.add_argument('--patch-size', default=320, type=int, help='training patch size')
+    parser.add_argument('--val-patch-size', default=320, type=int, help='val patch size')
+    parser.add_argument('--num-epochs', type=int, default=40, help='Number of training epochs') #old value 300
     parser.add_argument('--lr', type=float, default=1e-3, help='Learning rate') # Ted's default was 1e-3
     parser.add_argument('--lr-step-size', type=int, default=20,
                         help='Period of learning rate decay') #old value 100

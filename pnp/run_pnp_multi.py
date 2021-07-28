@@ -106,8 +106,13 @@ class DataTransform:
         sens = np.ones((320, 320, 2))
         mask = get_gro_mask(kspace.shape)
         masked_kspace = (kspace * mask) + 0.0
-        
-        target = fastmri.complex_abs(fastmri.ifft2c(kspace))
+
+        target = fastmri.ifft2c(kspace).float()
+        #image, mean, std = transforms.normalize_instance(image, eps=1e-11)
+        #image = image.clamp(-6, 6)
+        #
+        #target = transforms.normalize(target, mean, std, eps=1e-11)
+        #target = target.clamp(-6, 6)
 
         return masked_kspace, mask, sens, target, fname, slice
 
@@ -130,9 +135,8 @@ def denoiser(noisy,model,args):
         noisy, scale = transforms.denoiser_normalize(noisy, is_complex=True, use_std=args.normalize=='std')
     elif args.normalize=='constant':
         scale = 0.0016
-        noisy = noisy*(1/scale)
+        noisy = noisy/scale
     else:
-        print('in')
         scale = 1
 
     if args.denoiser_mode=='mag':
@@ -146,7 +150,7 @@ def denoiser(noisy,model,args):
         # move real/imag to channel position
         #noisy, mean, std = transforms.normalize_instance(noisy, eps=1e-11)
         #noisy = noisy.clamp(-6, 6)
-        noisy = noisy.permute(2,0,1).unsqueeze(0)
+        noisy = noisy.float().permute(2,0,1).unsqueeze(0)
         denoised_image = model(noisy).squeeze(0).permute(1,2,0)
 
     elif args.denoiser_mode == 'real-imag':
@@ -243,7 +247,7 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, sens_map_fo
 
             x_crop = transforms.complex_abs(x)
 
-            nmse_step = psnr_2(target, x_crop)
+            nmse_step = psnr_2(transforms.complex_abs(target), x_crop)
             print(nmse_step)
             a_nmse.append(nmse_step)
 
@@ -289,10 +293,10 @@ def cs_pnp(args, model, kspace, mask, sens, target):
     sens_map_foo = np.zeros((320,320)).astype(np.complex)
     mri = A_mri(sens_maps, mask)
     target = target.to(device)
-   
-    pred, a_nmse = admm(masked_kspace,model,args,target)
-    # pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
-    #     masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
+
+    #pred, a_nmse = admm(masked_kspace,model,args,target)
+    pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
+        masked_kspace, model, args, mri, target, 100, 400, sens_map_foo)
 
     if args.debug:
         plt.plot(a_nmse)
@@ -351,7 +355,7 @@ def admm(y, model, args, target):
         v = x
         u = x * 0
 
-        outer_iters = 100
+        outer_iters = 50
         inner_iters = args.inner_iters
 
         pnp = True
@@ -392,8 +396,8 @@ def admm(y, model, args, target):
 
             # Find psnr at every iteration
             x_crop = transforms.center_crop(transforms.complex_abs(x), (320, 320))
-            nmse_step = psnr_2(target, x_crop)
-
+            nmse_step = psnr_2(transforms.complex_abs(target), x_crop)
+            print(nmse_step)
             a_nmse.append(nmse_step)
         # unnormalize
         if args.normalize == 'kspace':
@@ -504,7 +508,7 @@ if __name__ == '__main__':
     parser.add_argument("--debug", default=True, action="store_true" , help="Debug mode")
     parser.add_argument("--test-idx", type=int, default=1, help="test index image for debug mode")
     parser.add_argument("--natural-image", default=False, action="store_true", help="Uses a pretrained DnCNN rather than a custom trained network")
-    parser.add_argument("--normalize", type=str, default=None, help="Type of normalization going into denoiser (None, 'max', 'std')")
+    parser.add_argument("--normalize", type=str, default='constant', help="Type of normalization going into denoiser (None, 'max', 'std')")
     parser.add_argument('--rotation-angles', type=int, default=0, help='number of rotation angles to try (<1 gives no rotation)')
     parser.add_argument("--accel", default=False, action='store_true', help="apply nesterov acceleration")
     parser.add_argument("--use-mid-slices", default=False, action='store_true', help="use only middle slices")

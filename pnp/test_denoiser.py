@@ -46,8 +46,6 @@ def psnr_2(gt, pred, zf=None):
     """ Compute Normalized Mean Squared Error (NMSE) """
     gt = gt.cpu().numpy()
     pred = pred.cpu().numpy()
-    plt.imshow(gt,cmap='gray')
-    plt.savefig('other.png')
     return peak_signal_noise_ratio(gt, pred, data_range=gt.max())
 
 
@@ -127,7 +125,7 @@ def denoiser(noisy, model, args):
     elif args.normalize == 'constant':
         print('in here')
         scale = 0.0016
-        noisy = noisy * (1 / scale)
+        noisy = noisy / scale
     else:
         scale = 1
 
@@ -200,9 +198,16 @@ def main(args):
         complex_image = fastmri.ifft2c(kspace)
         zfr = fastmri.ifft2c(zf_kspace)
         print(f'TEST PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(zfr))}')
-        noisy = complex_image + 0.2 * torch.randn(complex_image.size())
+        noisy = complex_image + 0.02 * torch.randn(complex_image.size())
+        #noisy, mean, std = transforms.normalize_instance(noisy, eps=1e-11)
+        #noisy = noisy.clamp(-6, 6)
+        #
+        #complex_image = transforms.normalize(complex_image, mean, std, eps=1e-11)
+        #complex_image = complex_image.clamp(-6, 6)
         denoised = denoiser(noisy, model, args)
         print(f'PRE PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(noisy))}\nPOST PSNR: {psnr_2(fastmri.complex_abs(complex_image),fastmri.complex_abs(denoised).detach())}')
+        #plt.imshow(np.abs(fastmri.complex_abs(denoised).detach().cpu().numpy()),cmap='gray')
+        #plt.savefig('denoised.png')
 
 
 if __name__ == '__main__':
@@ -236,7 +241,7 @@ if __name__ == '__main__':
     parser.add_argument("--test-idx", type=int, default=1, help="test index image for debug mode")
     parser.add_argument("--natural-image", default=False, action="store_true",
                         help="Uses a pretrained DnCNN rather than a custom trained network")
-    parser.add_argument("--normalize", type=str, default=None,
+    parser.add_argument("--normalize", type=str, default='constant',
                         help="Type of normalization going into denoiser (None, 'max', 'std')")
     parser.add_argument('--rotation-angles', type=int, default=0,
                         help='number of rotation angles to try (<1 gives no rotation)')
