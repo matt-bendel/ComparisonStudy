@@ -8,7 +8,7 @@ clc; clear all; close all;
 dimension = 320;
 R = 4;
 frames = 1;
-mid_sampling_band = 32; % 32 lines in the middle will be fully sampled
+mid_sampling_band = 24; % 32 lines in the middle will be fully sampled
 buffer = 8;
 
 %%
@@ -28,4 +28,12 @@ imagesc(samp); xlabel('frames'); ylabel('PE'); %axis('image'); %colormap(c); %co
 [index, val] = find(samp~=0);
 
 csvwrite('gro_r4_mask.csv',samp)
+
+inds = find(samp) - 1
+
+csvwrite('inds.csv',inds)
+
+allOneString = sprintf('%.0f,' , inds);
+allOneString = allOneString(1:end-1);% strip final comma
+fprintf(allOneString)
 

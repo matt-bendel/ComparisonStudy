@@ -88,8 +88,21 @@ class SelectiveSliceData_Train(Dataset):
         for fname in sorted(files):
 
             kspace = h5py.File(fname, 'r')['kspace']
-            num_slices = kspace.shape[0]
-            self.examples += [(fname, slice) for slice in range(num_slices)]
+
+            if kspace.shape[-1] <= 384:
+                continue
+            else:
+                #                 if restrict_size and ((kspace.shape[1]!=640) or (kspace.shape[2]!=368)):
+                #                     continue # skip non uniform sized images
+                num_slices = kspace.shape[0]
+                if use_top_slices:
+                    start_idx = 0
+                    end_idx = start_idx + number_of_top_slices
+                    self.examples += [(fname, slice) for slice in range(start_idx, end_idx)]
+                else:
+                    self.examples += [(fname, slice) for slice in range(num_slices)]
+
+    #             print("number of total images used for training: ",len(self.examples))
 
     def __len__(self):
         return len(self.examples)
@@ -104,9 +117,8 @@ class SelectiveSliceData_Train(Dataset):
         #         print(slice)
         #         print('hello')
         with h5py.File(fname, 'r') as data:
-            kspace = data['kspace'][()][slice]
-            target = transforms.to_tensor(data['kspace'][()])[slice]
-            target = tensor_to_complex_np(fastmri.ifft2c(target))
+            kspace = data['kspace'][slice]
+            target = data[self.recons_key][slice] if self.recons_key in data else None
             return self.transform(kspace, target, data.attrs, fname.name, slice)
 
 
@@ -145,26 +157,26 @@ class SelectiveSliceData_Val(Dataset):
 
         #         print('total volume files in validation data set: ', len(f) )
 
-        # for fname in f[
-        #              1:]:  # in the validation data, the 0th file has some wierd name and it gives a file not found error. Hence we start from 1
-        #     kspace = h5py.File(fname, 'r')['kspace']
-        #     with h5py.File(fname, 'r') as data:
-        #         if (data.attrs['acquisition'] == 'AXT2'):
-        #             scanner_str = findScannerStrength(data['ismrmrd_header'].value)
-        #             if (scanner_str > 2.2):
-        #                 if kspace.shape[1] >= 8:
-        #                     keep_files.append(fname)
-        #
-        # files = keep_files
+        for fname in f[
+                     1:]:  # in the validation data, the 0th file has some wierd name and it gives a file not found error. Hence we start from 1
+            kspace = h5py.File(fname, 'r')['kspace']
+            with h5py.File(fname, 'r') as data:
+                if (data.attrs['acquisition'] == 'AXT2'):
+                    scanner_str = findScannerStrength(data['ismrmrd_header'].value)
+                    if (scanner_str > 2.2):
+                        if kspace.shape[1] >= 8:
+                            keep_files.append(fname)
+
+        files = keep_files
 
         #         print('total volume files we are using for validation: ',len(files))
 
         random.seed(1000)
         np.random.seed(1000)
 
-        random.shuffle(f)
+        random.shuffle(files)
 
-        num_files = (len(f))
+        num_files = (len(files))
 
         if sample_rate < 1:
             random.shuffle(files)
@@ -174,8 +186,20 @@ class SelectiveSliceData_Val(Dataset):
 
             kspace = h5py.File(fname, 'r')['kspace']
 
-            num_slices = kspace.shape[0]
-            self.examples += [(fname, slice) for slice in range(num_slices)]
+            if kspace.shape[-1] <= 384:
+                continue
+            else:
+                #                 if restrict_size and ((kspace.shape[1]!=640) or (kspace.shape[2]!=368)):
+                #                     continue # skip non uniform sized images
+                num_slices = kspace.shape[0]
+                if use_top_slices:
+                    start_idx = 0
+                    end_idx = start_idx + number_of_top_slices
+                    self.examples += [(fname, slice) for slice in range(start_idx, end_idx)]
+                else:
+                    self.examples += [(fname, slice) for slice in range(num_slices)]
+
+    #         print("number of total images used for validation: ",len(self.examples))
 
     def __len__(self):
         return len(self.examples)
@@ -190,11 +214,9 @@ class SelectiveSliceData_Val(Dataset):
         #         print(slice)
         #         print('hello')
         with h5py.File(fname, 'r') as data:
-            kspace = data['kspace'][()][slice]
-            target = transforms.to_tensor(data['kspace'][()])[slice]
-            target = tensor_to_complex_np(fastmri.ifft2c(target))
+            kspace = data['kspace'][slice]
+            target = data[self.recons_key][slice] if self.recons_key in data else None
             return self.transform(kspace, target, data.attrs, fname.name, slice)
-
 
 # Helper function to get scanner strength from XML header info
 def findScannerStrength(xml_header_str):
@@ -606,12 +628,3 @@ class SelectiveSliceData(Dataset):
             target = transforms.to_tensor(data['kspace'][slice])
             target = fastmri.complex_abs(fastmri.ifft2c(target))
             return self.transform(kspace, target, data.attrs, fname.name, slice)
-
-# Helper function to get scanner strength from XML header info
-def findScannerStrength(xml_header_str):
-    root = ET.fromstring(xml_header_str)
-    for child in root:
-        if 'acquisitionSystemInformation' in child.tag:
-            for deep_child in child:
-                if 'systemFieldStrength_T' in deep_child.tag:
-                    return float(deep_child.text)
