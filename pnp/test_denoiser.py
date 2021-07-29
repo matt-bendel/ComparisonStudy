@@ -241,7 +241,7 @@ if __name__ == '__main__':
     parser.add_argument("--test-idx", type=int, default=1, help="test index image for debug mode")
     parser.add_argument("--natural-image", default=False, action="store_true",
                         help="Uses a pretrained DnCNN rather than a custom trained network")
-    parser.add_argument("--normalize", type=str, default='constant',
+    parser.add_argument("--normalize", type=str, default=None,
                         help="Type of normalization going into denoiser (None, 'max', 'std')")
     parser.add_argument('--rotation-angles', type=int, default=0,
                         help='number of rotation angles to try (<1 gives no rotation)')

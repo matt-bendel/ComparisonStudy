@@ -170,7 +170,7 @@ class DataTransform:
 
         image, rot_angle = transforms.best_rotate(image, self.num_angles)
 
-        scale = 0.0016 # constant scale
+        scale = 1 #0.0016 # constant scale
         image = image/scale
 
         scale = torch.tensor([scale], dtype=torch.float)

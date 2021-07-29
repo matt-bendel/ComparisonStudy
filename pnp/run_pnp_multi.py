@@ -294,9 +294,9 @@ def cs_pnp(args, model, kspace, mask, sens, target):
     mri = A_mri(sens_maps, mask)
     target = target.to(device)
 
-    #pred, a_nmse = admm(masked_kspace,model,args,target)
-    pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
-        masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
+    pred, a_nmse = admm(masked_kspace,model,args,target)
+    #pred, a_nmse, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
+    #    masked_kspace, model, args, mri, target, 50, 400, sens_map_foo)
 
     if args.debug:
         plt.plot(a_nmse)
@@ -508,7 +508,7 @@ if __name__ == '__main__':
     parser.add_argument("--debug", default=True, action="store_true" , help="Debug mode")
     parser.add_argument("--test-idx", type=int, default=1, help="test index image for debug mode")
     parser.add_argument("--natural-image", default=False, action="store_true", help="Uses a pretrained DnCNN rather than a custom trained network")
-    parser.add_argument("--normalize", type=str, default='constant', help="Type of normalization going into denoiser (None, 'max', 'std')")
+    parser.add_argument("--normalize", type=str, default=None, help="Type of normalization going into denoiser (None, 'max', 'std')")
     parser.add_argument('--rotation-angles', type=int, default=0, help='number of rotation angles to try (<1 gives no rotation)')
     parser.add_argument("--accel", default=False, action='store_true', help="apply nesterov acceleration")
     parser.add_argument("--use-mid-slices", default=False, action='store_true', help="use only middle slices")
