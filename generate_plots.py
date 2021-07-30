@@ -10,7 +10,7 @@ from pathlib import Path
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 rows = 2
-cols = 4
+cols = 5
 
 def get_psnr(gt, pred):
     maxval = gt.max()
@@ -74,7 +74,8 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
     with h5py.File(fname, "r") as target, \
             h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/base_cs/out/{file_name}', 'r') as recons, \
                 h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/zero_filled/out/{file_name}') as zf, \
-                    h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/unet/out/{file_name}') as unet_im:
+                    h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/unet/out/{file_name}') as unet_im, \
+                        h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im:
         ind = transforms.to_tensor(target['kspace'][()]).shape[0] // 2
         need_cropped = False
         crop_size = (320, 320)
@@ -88,25 +89,27 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         target = transforms.center_crop(target, crop_size)
         zfr = zf["reconstruction"][()][ind]
         recons = recons["reconstruction"][()][ind]
-        # pnp_im = pnp_im["reconstruction"][()][ind]
+        pnp_im = pnp_im["reconstruction"][()][ind]
         unet_im = unet_im["reconstruction"][()][ind]
 
         if need_cropped:
             zfr = transforms.center_crop(zfr, crop_size)
             recons = transforms.center_crop(recons, crop_size)
-            # pnp_im = transforms.center_crop(pnp_im, crop_size)
+            pnp_im = transforms.center_crop(pnp_im, crop_size)
             unet_im = transforms.center_crop(unet_im, crop_size)
 
         gt_max = target.max()
-        fig = plt.figure(figsize=(12,6))
+        fig = plt.figure(figsize=(18,6))
         fig.suptitle('T2 Reconstructions')
         generate_image(fig, gt_max, target, target, 'GT', 1)
         generate_image(fig, gt_max, target, zfr, 'ZFR', 2)
         generate_image(fig, gt_max, target, recons, 'CS-TV', 3)
         generate_image(fig, gt_max, target, unet_im, 'U-Net', 4)
-        im1, ax1 = generate_error_map(fig, gt_max, target, zfr, 'ZFR', 6)
-        generate_error_map(fig, gt_max, target, recons, 'CS-TV', 7)
-        im, ax = generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 8)
+        generate_image(fig, gt_max, target, pnp_im, 'PnP', 5)
+        generate_error_map(fig, gt_max, target, zfr, 'ZFR', 7)
+        generate_error_map(fig, gt_max, target, recons, 'CS-TV', 8)
+        generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 9)
+        im, ax = generate_error_map(fig, gt_max, target, pnp_im, 'PnP', 10)
 
         get_colorbar(fig, im, ax)
 

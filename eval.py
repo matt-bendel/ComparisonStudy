@@ -206,5 +206,5 @@ if __name__ == "__main__":
     print(metrics)
     get_avg_slice_time(args)
     #save_histogram('PSNR', all_psnr, args.method)
-    save_histogram('SNR', all_snr, args.method)
-    #save_histogram('SSIM', all_ssim, args.method)
+    #save_histogram('SNR', all_snr, args.method)
+    save_histogram('SSIM', all_ssim, args.method)

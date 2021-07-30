@@ -37,14 +37,17 @@ from utils.fastmri import utils
 from collections import defaultdict
 import logging
 import time
-from eval import nmse
+from eval import nmse, psnr
 import matplotlib.pyplot as plt
+from skimage.metrics import peak_signal_noise_ratio
+import pickle
+import pathlib
 
 class Init_Arg:
     def __init__(self):
         self.resolution = 320
-        self.test_idx = 1
-        self.data_path_val = '/storage/fastMRI_brain/data/Matt_preprocessed_data/singlecoil_test'
+        self.test_idx = 2
+        self.data_path_val = '/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test'
         self.sample_rate = 1.
         self.accelerations = [4]
         self.center_fractions = [0.08]
@@ -54,13 +57,16 @@ class Init_Arg:
         self.beta = 0.0005  # 0.0005 works well, 0.001 gives okish results. 0.001 works good for admm # Not used
         self.device = 0
         self.denoiser_mode = '2-chan'
-        self.checkpoint_denoiser = '/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/model.pt'
+        self.checkpoint_denoiser = '/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/checkpoints/best_model_30db.pt'
         self.normalize = 'constant'
         self.rotation_angles = 0
         self.accel = False
         self.nc = 1
         self.rss_target = True
         self.num_of_top_slices = 8
+        self.debug = False
+        self.snr = 20
+        self.output_path = pathlib.Path('out')
 
 
 def flatten(t):
@@ -76,6 +82,10 @@ def nmse_tensor(gt, pred):
     """ Compute Normalized Mean Squared Error (NMSE) """
     return torch.norm(gt - pred) ** 2 / torch.norm(gt) ** 2
 
+def psnr_tensor(gt, pred):
+    gt = gt.cpu().numpy()
+    pred = pred.cpu().numpy()
+    return peak_signal_noise_ratio(gt, pred, data_range=gt.max())
 
 class DataTransform:
     """
@@ -125,7 +135,7 @@ class DataTransform:
         numcoil = 1
         mask = np.tile(samp, (numcoil, 1, 1)).transpose((1, 2, 0)).astype(np.float32)
 
-        kspace = np.unsqueeze(kspace)
+        kspace = np.expand_dims(kspace, axis=0)
         kspace = kspace.transpose(1, 2, 0)
 
         x = ifft(kspace, (0, 1))  # (320, 320, 1)
@@ -148,8 +158,8 @@ class DataTransform:
         snr_ratio = 10 ** (args.snr / 10)
         noise_var = sig_power / snr_ratio / (masked_kspace.shape[0] * masked_kspace.shape[1] * len(nnz_index_mask))
 
-        print('noise variance of this run:')
-        print(format(noise_var))
+        #print('noise variance of this run:')
+        #print(format(noise_var))
 
 
         nnz_masked_kspace = masked_kspace[:, :, nnz_index_mask, :]
@@ -161,8 +171,8 @@ class DataTransform:
         noise_flat_1 = (torch.sqrt(0.5 * noise_var)) * torch.randn(nnz_masked_kspace_real_flat.size())
         noise_flat_2 = (torch.sqrt(0.5 * noise_var)) * torch.randn(nnz_masked_kspace_real_flat.size())
 
-        nnz_masked_kspace_real_flat_noisy = nnz_masked_kspace_real_flat + noise_flat_1
-        nnz_masked_kspace_imag_flat_noisy = nnz_masked_kspace_imag_flat + noise_flat_2
+        nnz_masked_kspace_real_flat_noisy = nnz_masked_kspace_real_flat.float() + noise_flat_1.float()
+        nnz_masked_kspace_imag_flat_noisy = nnz_masked_kspace_imag_flat.float() + noise_flat_2.float()
 
         nnz_masked_kspace_real_noisy = unflatten(nnz_masked_kspace_real_flat_noisy, nnz_masked_kspace_real.shape)
         nnz_masked_kspace_imag_noisy = unflatten(nnz_masked_kspace_imag_flat_noisy, nnz_masked_kspace_imag.shape)
@@ -181,8 +191,8 @@ class DataTransform:
         pow_4 = torch.sum(noise_flat_2 ** 2)
         ratio_snr = torch.sqrt(pow_1 + pow_2) / torch.sqrt(pow_3 + pow_4)
         SNRdB_test = 20 * torch.log10(ratio_snr)
-        print('SNR in dB for this run:')
-        print(SNRdB_test)
+        #print('SNR in dB for this run:')
+        #print(SNRdB_test)
 
         masked_kspace = masked_kspace_noisy
 
@@ -194,10 +204,10 @@ class DataTransform:
         ESPIRiT_width_mask = 24
         device = sp.Device(0)
 
-        sens_maps = mr.app.EspiritCalib(kspace_np, calib_width=ESPIRiT_width_mask, kernel_width=6, device=device, show_pbar=False).run()
+        sens_maps = mr.app.EspiritCalib(kspace_np, calib_width=ESPIRiT_width_mask, device=device, show_pbar=False).run()
 
         sens_maps = sp.to_device(sens_maps, -1)
-        sens_map_foo = np.zeros((args.resolution, args.resolution, 8)).astype(np.complex)
+        sens_map_foo = np.zeros((args.resolution, args.resolution, 1)).astype(np.complex)
         sens_map_foo[:, :, 0] = sens_maps[0, :, :]
 
         lsq_gt = np.sum(sens_map_foo.conj() * x, axis=-1)
@@ -282,6 +292,7 @@ class A_mri:
         y = self.mask * x
         y_ifft = transforms.ifft2(y)
         out = torch.sum(transforms.complex_mult(y_ifft, transforms.complex_conj(self.sens_maps)), dim=0)
+        return out
 
 class B_mri:
     def __init__(self, sens_maps, mask):
@@ -351,7 +362,7 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, mri_B, mri_
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-    EYE = torch.ones(8, args.image_size, args.image_size, 2)
+    EYE = torch.ones(1, args.image_size, args.image_size, 2)
     EYE = EYE.to(device)
 
     sens_map_zero_count = 0
@@ -366,11 +377,6 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, mri_B, mri_
     AA_ones = AA_ones.to(device)
 
     roo = 6.3688e-12
-
-    w_from = (args.image_size - 320) // 2  # crop images into 384x384
-    h_from = (args.image_size - 320) // 2
-    w_to = w_from + 320
-    h_to = h_from + 320
 
     with torch.no_grad():
         outer_iters = max_iter
@@ -388,8 +394,13 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, mri_B, mri_
         z = 0 * x
 
         x_crop = transforms.complex_abs(x)
-        nmse_step = nmse_tensor(target[w_from:w_to, h_from:h_to], x_crop[w_from:w_to, h_from:h_to])
+        #fig = plt.figure()
+        #plt.imshow(np.abs(x_crop.cpu().numpy()),cmap='gray')
+        #plt.savefig('pre_alg.png')
+        nmse_step = nmse_tensor(target, x_crop)
+        psnr_step = psnr_tensor(target, x_crop)
         a_nmse.append(nmse_step)
+        a_rSNR.append(psnr_step)
 
         L = find_spec_rad(mri, 100, x)
 
@@ -423,11 +434,12 @@ def pds_normal(y, model, args, mri, target, max_iter, gamma_1_input, mri_B, mri_
 
             target_3 = target_2 * AA_ones
             x_crop_3 = x_crop * AA_ones
-            rSNR_step = (1 / nmse_tensor(target_3[w_from:w_to, h_from:h_to], x_crop_3[w_from:w_to, h_from:h_to]))
-            nmse_step = nmse_tensor(target_3[w_from:w_to, h_from:h_to], x_crop_3[w_from:w_to, h_from:h_to])
+            rSNR_step = (1 / nmse_tensor(target_3, x_crop_3))
+            nmse_step = nmse_tensor(target_3, x_crop_3)
+            psnr_step = psnr_tensor(target_3, x_crop_3)
 
             a_nmse.append(nmse_step)
-            a_rSNR.append(rSNR_step)
+            a_rSNR.append(psnr_step)
 
             res_norm_log.append(resnorm_recov)
 
@@ -458,9 +470,9 @@ def cs_pnp(args, model, masked_kspace, mask, kspace, RSS_x, x, fname, slice, sen
     mask_tensor = mask_tensor.permute(2, 0, 1, 3).float()
 
     mask_tensor = mask_tensor.to(device)
-    masked_kspace_foo = masked_kspace.to(device)
+    masked_kspace_foo = masked_kspace.float().to(device)
 
-    target = transforms.to_tensor(RSS_x).float()
+    target = transforms.complex_abs(transforms.to_tensor(RSS_x)).float()
     target = target.to(device)
 
     mri = A_mri(sens_maps, mask_tensor)
@@ -475,25 +487,25 @@ def cs_pnp(args, model, masked_kspace, mask, kspace, RSS_x, x, fname, slice, sen
     zeta = 0.01
     gamma_inp = 400
 
-    pred, a_nmse, a_rSNR, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
+    pred, a_nmse, a_PSNR, gamma_1_log, gamma_2_log, required_res_norm_log, res_norm_log, input_RMSE, output_RMSE = pds_normal(
         masked_kspace_foo, model, args, mri, target, max_iter, gamma_inp, mri_B, mri_D, mask_tensor,
         mask_tensor_compliment,
         zeta, sens_map_foo)
 
     if args.debug:
-        plt.plot(a_nmse)
+        fig = plt.figure()
+        plt.plot(a_PSNR)
         plt.xlabel('iter')
         plt.ylabel('psnr')
         plt.grid()
         plt.savefig('test.png')
 
-        # plt.imshow(pred, cmap='gray')
-        # plt.savefig('pred.png')
-
 
     pred = transforms.complex_abs(pred).cpu().numpy()
-
-    return pred, target
+    #fig = plt.figure()
+    #plt.imshow(np.abs(pred),cmap='gray')
+    #plt.savefig('post_alg.png')
+    return pred, target.cpu().numpy()
 
 def main(args):
     # with multiprocessing.Pool(20) as pool:
@@ -525,31 +537,44 @@ def main(args):
         # print('Test ' +str(i)+ ' of ' + str(len(test_array)), end='\r')
         print('Test ' +str(i)+ ' of ' + str(len(test_array)))
         masked_kspace, mask, kspace, RSS_x, x, fname, slice, sens_map_foo, lsq_gt = data[i]
+        print(fname)
+        start_time_2 = time.perf_counter()
         prediction, target = cs_pnp(args, model, masked_kspace, mask, kspace, RSS_x, x, fname, slice, sens_map_foo, lsq_gt)
-        outputs.append( [fname, slice, prediction] )
+        time_taken_2 = time.perf_counter() - start_time_2
+        #fig = plt.figure()
+        #plt.imshow(np.abs(target),cmap='gray')
+        #plt.savefig('gt.png')
+        outputs.append( [fname, slice, prediction, time_taken_2] )
 
         # compute metrics
         NMSE = nmse(target, prediction)
+        PSNR = psnr(target, prediction)
         rSNR = 10*np.log10(1/NMSE)
         metrics = [NMSE, rSNR]
         a_metrics.append(metrics)
 
-        print('NMSE: {0:.4g}'.format(NMSE))
+        print(f'NMSE: {NMSE}\nPSNR: {PSNR}')
 
     time_taken = time.perf_counter() - start_time
     logging.info(f'Run Time = {time_taken:}s')
+    save_outputs(outputs, args.output_path)
 
 def save_outputs(outputs, output_path):
     if output_path is None:
         return
     reconstructions = defaultdict(list)
     times = defaultdict(list)
-    for fname, slice, pred in outputs:
+    for fname, slice, pred, recon_time in outputs:
         reconstructions[fname].append((slice, pred))
+        times[fname].append((slice, recon_time))
     reconstructions = {
         fname: np.stack([pred for _, pred in sorted(slice_preds)])
         for fname, slice_preds in reconstructions.items()
     }
+
+    with open('out/recon_times.pkl', 'wb') as f:
+        pickle.dump(times, f)
+
     utils.save_reconstructions(reconstructions, output_path)
 
 if __name__ == '__main__':

@@ -32,7 +32,7 @@ from torch.nn import functional as F
 from torch.utils.data import DataLoader
 from espirit import ifft, fft
 from argparse import ArgumentParser
-from utils.fastmri.data import transforms
+from pnp import transforms
 from utils.fastmri.data.mri_data import SelectiveSliceData_Train
 from utils.fastmri.data.mri_data import SelectiveSliceData_Val
 from utils.fastmri.models.PnP.dncnn import DnCNN
@@ -40,10 +40,11 @@ import pathlib
 from pathlib import Path
 import sigpy as sp
 import sigpy.mri as mr
+from utils.fastmri import tensor_to_complex_np
+import matplotlib.pyplot as plt
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
 
 def flatten(t):
     t = t.reshape(1, -1)
@@ -93,6 +94,7 @@ class DataTransform:
         self.rss_target = rss_target
         self.train = train_data
         self.image_size = image_size
+        self.FIRST = True
 
     def __call__(self, kspace, target, attrs, fname, slice):
         """
@@ -113,7 +115,7 @@ class DataTransform:
 
         """
 
-        kspace = np.unsqueeze(kspace)
+        kspace = np.expand_dims(kspace, axis=0)
         kspace = kspace.transpose(1, 2, 0)
         x = ifft(kspace, (0, 1))  # (320, 320, 1)
         coil_compressed_x = x
@@ -121,18 +123,20 @@ class DataTransform:
         kspace = transforms.to_tensor(kspace)
         kspace = kspace.permute(2, 0, 1, 3)
         ESPIRiT_width_mask = 24
-        device = sp.Device(0)
+        #device = sp.Device(0)
+        kspace_np = tensor_to_complex_np(kspace)
+        sens_maps = mr.app.EspiritCalib(kspace_np, calib_width=ESPIRiT_width_mask, show_pbar=False).run()
 
-        sens_maps = mr.app.EspiritCalib(kspace, calib_width=ESPIRiT_width_mask, kernel_width=6, device=device,
-                                        show_pbar=False).run()
-
-        sens_maps = sp.to_device(sens_maps, -1)
-        sens_map_foo = np.zeros((args.resolution, args.resolution, 8)).astype(np.complex)
+        #sens_maps = sp.to_device(sens_maps, -1)
+        sens_map_foo = np.zeros((320, 320, 1)).astype(np.complex)
         sens_map_foo[:, :, 0] = sens_maps[0, :, :]
 
         image = np.sum(sens_map_foo.conj() * coil_compressed_x, axis=-1)
         image = transforms.to_tensor(image)
-
+        if self.FIRST:
+            plt.imshow(transforms.complex_abs(image),cmap='gray')
+            plt.savefig('test.png')
+            self.FIRST = False
         # Crop input image
         if self.random_crop:
             image = transforms.complex_random_crop(image, (self.resolution, self.resolution))
@@ -163,7 +167,7 @@ class DataTransform:
 
 def create_datasets(args):
     train_data = SelectiveSliceData_Train(
-        root=args.data_path_train,
+        root=args.data_path / 'singlecoil_train',
         transform=DataTransform(args.std, args.patch_size, mag_only=args.denoiser_mode == 'mag',
                                 normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=True,
                                 rss_target=args.rss_target, train_data=True, image_size=320),
@@ -177,7 +181,7 @@ def create_datasets(args):
     )
 
     dev_data = SelectiveSliceData_Val(
-        root=args.data_path_val,
+        root=args.data_path / 'singlecoil_val',
         transform=DataTransform(args.std, args.val_patch_size, mag_only=args.denoiser_mode == 'mag',
                                 normalize=args.normalize, rotation_angles=args.rotation_angles, random_crop=False,
                                 rss_target=args.rss_target, train_data=False, image_size=320),
@@ -195,7 +199,7 @@ def create_datasets(args):
 
 def create_data_loaders(args):
     dev_data, train_data = create_datasets(args)
-
+    
     train_loader = DataLoader(
         dataset=train_data,
         batch_size=args.batch_size,
@@ -434,12 +438,14 @@ def create_arg_parser():
     parser.add_argument('--device', type=int, default=0,
                         help='Which device to train on.')
     parser.add_argument('--exp-dir', type=pathlib.Path,
-                        default='/storage/fastMRI_brain/PnP_brain/models/DnCNN/Trial_9/',
+                        default='/home/bendel.8/Git_Repos/ComparisonStudy/utils/fastmri/models/PnP/checkpoints',
                         help='Path where model and results should be saved')
     parser.add_argument('--resume', action='store_true',
                         help='If set, resume the training from a previous model checkpoint. '
                              '"--checkpoint" should be set with this')
     parser.add_argument('--checkpoint', type=str,
+                        help='Path to an existing checkpoint. Used along with "--resume"')
+    parser.add_argument('--data-path', type=pathlib.Path, default='/storage/fastMRI_brain/data/Matt_preprocessed_data/T2',
                         help='Path to an existing checkpoint. Used along with "--resume"')
     parser.add_argument("--use-mid-slices", default=False, action='store_true', help="use only middle slices")
     parser.add_argument("--scanner-strength", type=float, default=None,

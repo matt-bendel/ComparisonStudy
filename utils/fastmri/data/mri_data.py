@@ -48,11 +48,11 @@ class SelectiveSliceData_Train(Dataset):
             raise ValueError('challenge should be either "singlecoil" or "multicoil"')
 
         self.transform = transform
-        self.recons_key = 'reconstruction_esc' if challenge == 'singlecoil' \
+        self.recons_key = 'reconstruction_rss' if challenge == 'singlecoil' \
             else 'reconstruction_rss'
 
         self.examples = []
-        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1, 2, 3'
         files = list(pathlib.Path(root).iterdir())
 
         # remove files with wrong modality or scanner
@@ -64,11 +64,7 @@ class SelectiveSliceData_Train(Dataset):
         for fname in f[0:]:
             kspace = h5py.File(fname, 'r')['kspace']
             with h5py.File(fname, 'r') as data:
-                if (data.attrs['acquisition'] == 'AXT2'):
-                    scanner_str = findScannerStrength(data['ismrmrd_header'].value)
-                    if (scanner_str > 2.2):
-                        if kspace.shape[1] >= 8:
-                            keep_files.append(fname)
+                keep_files.append(fname)
 
         files = keep_files
 
@@ -89,18 +85,8 @@ class SelectiveSliceData_Train(Dataset):
 
             kspace = h5py.File(fname, 'r')['kspace']
 
-            if kspace.shape[-1] <= 384:
-                continue
-            else:
-                #                 if restrict_size and ((kspace.shape[1]!=640) or (kspace.shape[2]!=368)):
-                #                     continue # skip non uniform sized images
-                num_slices = kspace.shape[0]
-                if use_top_slices:
-                    start_idx = 0
-                    end_idx = start_idx + number_of_top_slices
-                    self.examples += [(fname, slice) for slice in range(start_idx, end_idx)]
-                else:
-                    self.examples += [(fname, slice) for slice in range(num_slices)]
+            num_slices = kspace.shape[0]
+            self.examples += [(fname, slice) for slice in range(num_slices)]
 
     #             print("number of total images used for training: ",len(self.examples))
 
@@ -117,8 +103,8 @@ class SelectiveSliceData_Train(Dataset):
         #         print(slice)
         #         print('hello')
         with h5py.File(fname, 'r') as data:
-            kspace = data['kspace'][slice]
-            target = data[self.recons_key][slice] if self.recons_key in data else None
+            kspace = data['kspace'][()][slice]
+            target = data[self.recons_key][()][slice] if self.recons_key in data else None
             return self.transform(kspace, target, data.attrs, fname.name, slice)
 
 
@@ -144,11 +130,11 @@ class SelectiveSliceData_Val(Dataset):
             raise ValueError('challenge should be either "singlecoil" or "multicoil"')
 
         self.transform = transform
-        self.recons_key = 'reconstruction_esc' if challenge == 'singlecoil' \
+        self.recons_key = 'reconstruction_rss' if challenge == 'singlecoil' \
             else 'reconstruction_rss'
 
         self.examples = []
-        os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0, 1, 2, 3'
         files = list(pathlib.Path(root).iterdir())
 
         # remove files with wrong modality or scanner
@@ -158,14 +144,10 @@ class SelectiveSliceData_Val(Dataset):
         #         print('total volume files in validation data set: ', len(f) )
 
         for fname in f[
-                     1:]:  # in the validation data, the 0th file has some wierd name and it gives a file not found error. Hence we start from 1
-            kspace = h5py.File(fname, 'r')['kspace']
+                     0:]:  # in the validation data, the 0th file has some wierd name and it gives a file not found error. Hence we start from 1
+            kspace = h5py.File(fname, 'r')['kspace'][()]
             with h5py.File(fname, 'r') as data:
-                if (data.attrs['acquisition'] == 'AXT2'):
-                    scanner_str = findScannerStrength(data['ismrmrd_header'].value)
-                    if (scanner_str > 2.2):
-                        if kspace.shape[1] >= 8:
-                            keep_files.append(fname)
+                keep_files.append(fname)
 
         files = keep_files
 
@@ -186,18 +168,8 @@ class SelectiveSliceData_Val(Dataset):
 
             kspace = h5py.File(fname, 'r')['kspace']
 
-            if kspace.shape[-1] <= 384:
-                continue
-            else:
-                #                 if restrict_size and ((kspace.shape[1]!=640) or (kspace.shape[2]!=368)):
-                #                     continue # skip non uniform sized images
-                num_slices = kspace.shape[0]
-                if use_top_slices:
-                    start_idx = 0
-                    end_idx = start_idx + number_of_top_slices
-                    self.examples += [(fname, slice) for slice in range(start_idx, end_idx)]
-                else:
-                    self.examples += [(fname, slice) for slice in range(num_slices)]
+            num_slices = kspace.shape[0]
+            self.examples += [(fname, slice) for slice in range(num_slices)]
 
     #         print("number of total images used for validation: ",len(self.examples))
 
@@ -214,8 +186,8 @@ class SelectiveSliceData_Val(Dataset):
         #         print(slice)
         #         print('hello')
         with h5py.File(fname, 'r') as data:
-            kspace = data['kspace'][slice]
-            target = data[self.recons_key][slice] if self.recons_key in data else None
+            kspace = data['kspace'][()][slice]
+            target = data[self.recons_key][()][slice] if self.recons_key in data else None
             return self.transform(kspace, target, data.attrs, fname.name, slice)
 
 # Helper function to get scanner strength from XML header info
