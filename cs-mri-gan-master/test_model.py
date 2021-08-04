@@ -20,7 +20,8 @@ from utils.fastmri.data.subsample import MaskFunc
 from utils.fastmri.utils import generate_gro_mask
 import pathlib
 from utils.fastmri.data import transforms as T
-
+from utils import fastmri
+import matplotlib.pyplot as plt
 
 def resden(x, fil, gr, beta, gamma_init, trainable):
     x1 = Conv2D(filters=gr, kernel_size=3, strides=1, padding='same', use_bias=True, kernel_initializer='he_normal',
@@ -69,7 +70,7 @@ def resresden(x, fil, gr, betad, betar, gamma_init, trainable):
     return xout
 
 
-def generator(inp_shape, trainable=True):
+def generator(inp_shape, trainable=False):
     gamma_init = tf.random_normal_initializer(1., 0.02)
 
     fd = 512
@@ -181,8 +182,14 @@ class DataTransform(object):
         kspace = T.to_tensor(kspace)
         mask = get_gro_mask(kspace.shape)
         masked_kspace = (kspace * mask + 0.0)
+        # Inverse Fourier Transform to get zero filled solution
+        image = fastmri.ifft2c(masked_kspace)
 
-        return (masked_kspace, mask, target, fname, slice)
+        target = fastmri.ifft2c(kspace)
+        target = T.complex_center_crop(target, (320,320))
+        target = fastmri.complex_abs(target)
+
+        return (image.numpy(), mask, target.numpy(), fname, slice)
 
 def save_outputs(outputs, output_path):
     """Saves reconstruction outputs to output_path."""
@@ -204,20 +211,17 @@ def save_outputs(outputs, output_path):
         pickle.dump(times, f)
 
 def test_method(idx, gen):
+    zfr, mask, target, fname, slice_num = dataset[idx] 
     start_time = time.perf_counter()
-    masked_kspace, mask, target, fname, slice_num = dataset[idx]
-    masked_kspace = np.expand_dims(masked_kspace.numpy(), axis=-1)
-    real = masked_kspace.real
-    imag = masked_kspace.imag
-    data_gen = np.concatenate((real, imag), axis=-1)
 
-    prediction = gen4.predict(data_gen)
+    #prediction = gen4.predict(np.expand_dims(zfr, axis=0))
+    #prediction = np.squeeze(np.squeeze(prediction, axis=0), axis=-1)
 
-    if True:
-        print(prediction.shape)
-        print(type(prediction))
+    plt.imshow(fastmri.complex_abs(zfr), cmap='gray')
+    plt.savefig('test.png')
 
     recon_time = time.perf_counter() - start_time
+    
     return fname, slice_num, prediction, recon_time
 
 
@@ -233,12 +237,16 @@ if __name__ == '__main__':
     outputs = []
 
     inp_shape = (320, 320, 2)
-    gen4 = generator(inp_shape=inp_shape, trainable=False)
-    filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/'
-    gen4.load_weights(filename)
+    gen4 = None #generator(inp_shape=inp_shape, trainable=False)
 
-    for i in range(len(dataset)):
-        outputs.append(test_method(i, gen4))
+    filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_0015.h5'
+    #gen4.load_weights(filename)
+
+    #for i in range(len(dataset)):
+    outputs.append(test_method(0, gen4))
+    exit()
+    save_reconstructions(outputs, pathlib.Path('out'))
+
 
 # data_path='/home/cs-mri-gan/testing_gt.pickle'
 # usam_path='/home/cs-mri-gan/testing_usamp_1dg_a5.pickle'

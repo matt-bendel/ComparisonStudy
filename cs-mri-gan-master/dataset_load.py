@@ -40,7 +40,6 @@ def load_a(path, num):
                     data.append(slice_gt)
 
                     slice_us = usamp_image[i].numpy()
-                    print(slice_us.shape)
                     usamp_data.append(slice_us)
 
         return np.asarray(data), np.asarray(usamp_data)
