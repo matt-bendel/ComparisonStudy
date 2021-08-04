@@ -34,6 +34,7 @@ def load_a(path, num):
                 usamp_image = fastmri.ifft2c(usamp_kspace)
 
                 image = fastmri.complex_abs(image)
+                usamp_image = fastmri.complex_abs(usamp_image)
 
                 for i in range(image.shape[0]):
                     slice_gt = image[i].numpy()
@@ -44,7 +45,6 @@ def load_a(path, num):
 
         return np.asarray(data), np.asarray(usamp_data)
 
-'''
 data = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_train')
 train_gt, train_us = load_a(data,0)
 
@@ -58,8 +58,8 @@ with open(os.path.join(save_path,'training_gt.pickle'),'wb') as f:
 
 with open(os.path.join(save_path,'training_usamp.pickle'),'wb') as f:
     pickle.dump(train_us,f,protocol=4)
-'''
 
+'''
 #for testing data
 
 test_path = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
@@ -70,4 +70,4 @@ with open(os.path.join(save_path,'testing_gt.pickle'),'wb') as f:
 
 with open(os.path.join(save_path, 'testing_usamp.pickle'), 'wb') as f:
     pickle.dump(test_us, f, protocol=4)
-
+'''
