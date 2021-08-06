@@ -47,8 +47,10 @@ def generate_error_map(fig, target, recon, method, image_ind, relative=False, k=
     # Normalize error between target and reconstruction
     error = (target - recon) if relative else np.abs(target - recon)
     #normalized_error = error / error.max() if not relative else error
-
-    im = ax.imshow(k * error, cmap='bwr' if relative else 'jet') # Plot image
+    if relative:
+        im = ax.imshow(k * error, cmap='bwr', origin='lower', vmin=-0.0001, vmax=0.0001) # Plot image
+    else:
+        im = ax.imshow(k * error, cmap='jet') # Plot image
 
     # Remove axis ticks
     ax.set_xticks([])
@@ -122,10 +124,10 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 10)
         get_colorbar(fig, im, ax)
 
-        generate_error_map(fig, target, zfr, 'ZFR', 12, relative=True)
-        generate_error_map(fig, target, recons, 'CS-TV', 13, relative=True)
-        generate_error_map(fig, target, unet_im, 'U-Net', 14, relative=True)
-        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 15, relative=True)
+        generate_error_map(fig, target, zfr, 'ZFR', 12, relative=True, k=1)
+        generate_error_map(fig, target, recons, 'CS-TV', 13, relative=True, k=1)
+        generate_error_map(fig, target, unet_im, 'U-Net', 14, relative=True, k=1)
+        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 15, relative=True, k=1)
         get_colorbar(fig, im, ax)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
