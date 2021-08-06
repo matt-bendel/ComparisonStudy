@@ -39,16 +39,16 @@ def generate_image(fig, target, image, method, image_ind):
     ax.set_yticks([])
     plt.xlabel(f'{method} Reconstruction')
 
-def generate_error_map(fig, target, recon, method, image_ind, relative=False, k=2):
+def generate_error_map(fig, target, recon, method, image_ind, relative=False, k=3):
     # Assume rows and cols are available globally
     # rows and cols are both previously defined ints
     ax = fig.add_subplot(rows, cols, image_ind) # Add to subplot
 
     # Normalize error between target and reconstruction
     error = (target - recon) if relative else np.abs(target - recon)
-    normalized_error = error / error.max()
+    #normalized_error = error / error.max() if not relative else error
 
-    im = ax.imshow(k * normalized_error, cmap='bwr' if relative else 'jet', vmin=0, vmax=1) # Plot image
+    im = ax.imshow(k * error, cmap='bwr' if relative else 'jet') # Plot image
 
     # Remove axis ticks
     ax.set_xticks([])
@@ -122,10 +122,10 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 10)
         get_colorbar(fig, im, ax)
 
-        generate_error_map(fig, target, zfr, 'ZFR', 12)
-        generate_error_map(fig, target, recons, 'CS-TV', 13)
-        generate_error_map(fig, target, unet_im, 'U-Net', 14)
-        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 15)
+        generate_error_map(fig, target, zfr, 'ZFR', 12, relative=True)
+        generate_error_map(fig, target, recons, 'CS-TV', 13, relative=True)
+        generate_error_map(fig, target, unet_im, 'U-Net', 14, relative=True)
+        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 15, relative=True)
         get_colorbar(fig, im, ax)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
