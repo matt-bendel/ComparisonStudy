@@ -11,7 +11,8 @@ from keras.layers import Concatenate, Activation
 from keras.layers import LeakyReLU, BatchNormalization, Lambda
 from keras import backend as K
 import os
-from skimage.metrics import peak_signal_noise_ratio
+from skimage.metrics import peak_signal_noise_ratio,structural_similarity
+import matplotlib.pyplot as plt
 
 def accw(y_true, y_pred):
     y_pred = K.clip(y_pred, -1, 1)
@@ -29,10 +30,10 @@ def wloss(y_true, y_predict):
     return -K.mean(y_true * y_predict)
 
 
-def discriminator(inp_shape=(320, 320), trainable=True):
+def discriminator(inp_shape=(320, 320, 1), trainable=True):
     gamma_init = tf.random_normal_initializer(1., 0.02)
 
-    inp = Input(shape=inp_shape)
+    inp = Input(shape=(320,320,1))
 
     l0 = Conv2D(64, (4, 4), strides=(2, 2), padding='same', use_bias=True, kernel_initializer='he_normal',
                 bias_initializer='zeros')(inp)  # b_init is set to none, maybe they are not using bias here, but I am.
@@ -290,23 +291,24 @@ n_epochs = 300
 n_batch = 32
 n_critic = 3
 clip_val = 0.05
-in_shape_gen = (320, 320)
-in_shape_dis = (320, 320)
+in_shape_gen = (320, 320, 2)
+in_shape_dis = (320, 320, 1)
 accel = 3
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 d_model = discriminator(inp_shape=in_shape_dis, trainable=True)
-d_model.summary()
-d_par = multi_gpu_model(d_model, gpus=4, cpu_relocation=True)  # for multi-gpu training
+d_par = multi_gpu_model(d_model, gpus=4, cpu_relocation = True)  # for multi-gpu training
+d_par.summary()
 opt = Adam(lr=0.0002, beta_1=0.5)
 d_par.compile(loss=wloss, optimizer=opt, metrics=[accw])
 
 g_model = generator(inp_shape=in_shape_gen, trainable=True)
-g_par = multi_gpu_model(g_model, gpus=4, cpu_relocation=True)  # for multi-gpu training
+g_par = multi_gpu_model(g_model, gpus=4, cpu_relocation = True)  # for multi-gpu training
 g_par.summary()
 
 gan_model = define_gan_model(g_par, d_par, in_shape_gen)
+#gan_model = multi_gpu_model(gan_model, gpus=4, cpu_relocation = True)
 opt1 = Adam(lr=0.0001, beta_1=0.5)
 gan_model.compile(loss=[wloss, 'mae', mssim], optimizer=opt1,
                   loss_weights=[0.01, 20.0, 1.0])  # loss weights for generator training
@@ -318,8 +320,18 @@ usam_path = 'training_usamp.pickle'  # Zero-filled reconstructions
 df = open(data_path, 'rb')
 uf = open(usam_path, 'rb')
 
-dataset_real = pickle.load(df)
-u_sampled_data_2c = pickle.load(uf)
+dataset_real = np.expand_dims(pickle.load(df), axis=-1)
+#plt.imshow(dataset_real[0, :, :, 0], cmap='gray')
+#plt.savefig('random_im.png')
+print(f'REAL IMAGES: {len(dataset_real)}, SHAPE: {dataset_real[0].shape}')
+u_sampled_data = np.expand_dims(pickle.load(uf), axis=-1)
+usam_real = u_sampled_data.real
+usam_imag = u_sampled_data.imag
+
+u_sampled_data_2c = np.concatenate((usam_real, usam_imag), axis=-1)
+#plt.imshow(u_sampled_data_2c[0, :, :, 0], cmap='gray')
+#plt.savefig('random_im_us.png')
+print(f'USAMP IMAGES: {len(u_sampled_data_2c)}, SHAPE: {u_sampled_data_2c[0].shape}')
 
 f = open('log_a5.txt', 'x')
 f = open('log_a5.txt', 'a')

@@ -8,6 +8,7 @@ from utils.fastmri.utils import generate_gro_mask
 import h5py
 from utils.fastmri.data import transforms
 import torch
+from utils.fastmri import tensor_to_complex_np
 
 save_path=''
 
@@ -34,13 +35,12 @@ def load_a(path, num):
                 usamp_image = fastmri.ifft2c(usamp_kspace)
 
                 image = fastmri.complex_abs(image)
-                usamp_image = fastmri.complex_abs(usamp_image)
 
                 for i in range(image.shape[0]):
-                    slice_gt = image[i].numpy()
+                    slice_gt = image[i].numpy() / np.max(image[i].numpy()) * 2
                     data.append(slice_gt)
 
-                    slice_us = usamp_image[i].numpy()
+                    slice_us = tensor_to_complex_np(usamp_image[i]) / tensor_to_complex_np(usamp_image[i]) * 2
                     usamp_data.append(slice_us)
 
         return np.asarray(data), np.asarray(usamp_data)

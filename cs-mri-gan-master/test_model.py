@@ -22,6 +22,7 @@ import pathlib
 from utils.fastmri.data import transforms as T
 from utils import fastmri
 import matplotlib.pyplot as plt
+from utils.fastmri import tensor_to_complex_np
 
 def resden(x, fil, gr, beta, gamma_init, trainable):
     x1 = Conv2D(filters=gr, kernel_size=3, strides=1, padding='same', use_bias=True, kernel_initializer='he_normal',
@@ -184,12 +185,13 @@ class DataTransform(object):
         masked_kspace = (kspace * mask + 0.0)
         # Inverse Fourier Transform to get zero filled solution
         image = fastmri.ifft2c(masked_kspace)
+        image = fastmri.complex_abs(image)
 
         target = fastmri.ifft2c(kspace)
         target = T.complex_center_crop(target, (320,320))
         target = fastmri.complex_abs(target)
 
-        return (image.numpy(), mask, target.numpy(), fname, slice)
+        return (np.expand_dims(np.expand_dims(image.numpy(), axis=-1), axis=0), mask, target.numpy(), fname, slice)
 
 def save_outputs(outputs, output_path):
     """Saves reconstruction outputs to output_path."""
@@ -214,16 +216,18 @@ def test_method(idx, gen):
     zfr, mask, target, fname, slice_num = dataset[idx] 
     start_time = time.perf_counter()
 
-    #prediction = gen4.predict(np.expand_dims(zfr, axis=0))
-    #prediction = np.squeeze(np.squeeze(prediction, axis=0), axis=-1)
+    prediction = gen4.predict(zfr)
+    prediction = np.squeeze(np.squeeze(prediction, axis=0), axis=-1)
 
-    plt.imshow(fastmri.complex_abs(zfr), cmap='gray')
-    plt.savefig('test.png')
+    plt.imshow(np.abs(prediction), cmap='gray')
+    plt.savefig('test_33.png')
 
     recon_time = time.perf_counter() - start_time
     
     return fname, slice_num, prediction, recon_time
 
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "" #"0,1,2,3"
 
 if __name__ == '__main__':
     data_path = '/storage/fastMRI_brain/data/Matt_preprocessed_data/T2'
@@ -236,11 +240,11 @@ if __name__ == '__main__':
 
     outputs = []
 
-    inp_shape = (320, 320, 2)
-    gen4 = None #generator(inp_shape=inp_shape, trainable=False)
+    inp_shape = (320, 320, 1)
+    gen4 = generator(inp_shape=inp_shape, trainable=False)
 
-    filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_0015.h5'
-    #gen4.load_weights(filename)
+    filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_0033.h5'
+    gen4.load_weights(filename)
 
     #for i in range(len(dataset)):
     outputs.append(test_method(0, gen4))
@@ -248,47 +252,3 @@ if __name__ == '__main__':
     save_reconstructions(outputs, pathlib.Path('out'))
 
 
-# data_path='/home/cs-mri-gan/testing_gt.pickle'
-# usam_path='/home/cs-mri-gan/testing_usamp_1dg_a5.pickle'
-#
-# df=open(data_path,'rb')
-# uf=open(usam_path,'rb')
-#
-# dataset_real=pickle.load(df)
-# u_sampled_data=pickle.load(uf)
-#
-# data = np.asarray(dataset_real[0:2000], dtype = 'float32')
-# usp_data = np.expand_dims(u_sampled_data[0:2000], axis = -1)
-#
-# inp_shape = (256,256,2)
-# trainable = False
-#
-# usp_img = usp_data.imag
-# usp_real = usp_data.real
-#
-# data_gen = np.concatenate((usp_real, usp_img), axis =-1)
-#
-# #to infer all the models after a run
-# gen4 = generator(inp_shape = inp_shape, trainable = False)
-#
-# f = open('/home/cs-mri-gan/cs_mri_a5_metrics.txt', 'x')
-# f = open('/home/cs-mri-gan/cs_mri_a5_metrics.txt', 'a')
-#
-# for i in range(300):
-#    filename = '/home/cs-mri-gan/gen_weights_a5_%04d.h5' % (i+1)
-#    gen4.load_weights(filename)
-#    out4 = gen4.predict(data_gen)
-#    psnr, ssim = metrics(data, out4[:,:,:,0],2.0)
-#    f.write('psnr = %.5f, ssim = %.7f' %(psnr, ssim))
-#    f.write('\n')
-#    print(psnr, ssim)
-
-
-'''
-#to infer one model
-gen16 = generator(inp_shape = inp_shape, trainable = False)
-gen16.load_weights('/home/cs-mri-gan/gen_weights_a5_best.h5')
-out16 = gen16.predict(data_gen)
-psnr, ssim = metrics(data, out16[:,:,:,0], 2.0)
-print(psnr,ssim)
-'''
