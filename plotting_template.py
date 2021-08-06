@@ -25,9 +25,8 @@ def generate_error_map(fig, max, target, recon, method, image_ind, relative=Fals
 
     # Normalize error between target and reconstruction
     error = (target - recon) if relative else np.abs(target - recon)
-    normalized_error = error / error.max()
 
-    im = ax.imshow(k * normalized_error, cmap='bwr' if relative else 'jet', vmin=0, vmax=1) # Plot image
+    im = ax.imshow(k * error, cmap='bwr' if relative else 'jet') # Plot image
 
     # Remove axis ticks
     ax.set_xticks([])
