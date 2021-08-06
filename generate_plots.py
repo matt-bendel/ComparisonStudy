@@ -9,7 +9,7 @@ from tqdm import tqdm
 from pathlib import Path
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-rows = 2
+rows = 3
 cols = 5
 
 def get_psnr(gt, pred):
@@ -26,7 +26,7 @@ def get_ssim(target, pred):
         target, pred, data_range=maxval
     )
 
-def generate_image(fig, x_max, target, image, method, image_ind):
+def generate_image(fig, target, image, method, image_ind):
     # rows and cols are both previously defined ints
     ax = fig.add_subplot(rows, cols, image_ind)
     if method != 'GT':
@@ -39,16 +39,25 @@ def generate_image(fig, x_max, target, image, method, image_ind):
     ax.set_yticks([])
     plt.xlabel(f'{method} Reconstruction')
 
-def generate_error_map(fig, x_max, target, recon, method, image_ind, k=2):
+def generate_error_map(fig, target, recon, method, image_ind, relative=False, k=2):
     # Assume rows and cols are available globally
     # rows and cols are both previously defined ints
-    ax = fig.add_subplot(rows, cols, image_ind)
-    error = np.abs(target-recon)
-    n_e = error / error.max()
-    im = ax.imshow(k * n_e, cmap='jet', vmin=0, vmax=1)
+    ax = fig.add_subplot(rows, cols, image_ind) # Add to subplot
+
+    # Normalize error between target and reconstruction
+    error = (target - recon) if relative else np.abs(target - recon)
+    normalized_error = error / error.max()
+
+    im = ax.imshow(k * normalized_error, cmap='bwr' if relative else 'jet', vmin=0, vmax=1) # Plot image
+
+    # Remove axis ticks
     ax.set_xticks([])
     ax.set_yticks([])
-    plt.xlabel(f'{method} Error')
+
+    # Assign x label for plot
+    plt.xlabel(f'{method} Relative Error' if relative else f'{method} Absolute Error')
+
+    # Return plotted image and its axis in the subplot
     return im, ax
 
 def get_colorbar(fig, im, ax):
@@ -101,16 +110,22 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         gt_max = target.max()
         fig = plt.figure(figsize=(18,6))
         fig.suptitle('T2 Reconstructions')
-        generate_image(fig, gt_max, target, target, 'GT', 1)
-        generate_image(fig, gt_max, target, zfr, 'ZFR', 2)
-        generate_image(fig, gt_max, target, recons, 'CS-TV', 3)
-        generate_image(fig, gt_max, target, unet_im, 'U-Net', 4)
-        generate_image(fig, gt_max, target, pnp_im, 'PnP', 5)
-        generate_error_map(fig, gt_max, target, zfr, 'ZFR', 7)
-        generate_error_map(fig, gt_max, target, recons, 'CS-TV', 8)
-        generate_error_map(fig, gt_max, target, unet_im, 'U-Net', 9)
-        im, ax = generate_error_map(fig, gt_max, target, pnp_im, 'PnP', 10)
+        generate_image(fig, target, target, 'GT', 1)
+        generate_image(fig, target, zfr, 'ZFR', 2)
+        generate_image(fig, target, recons, 'CS-TV', 3)
+        generate_image(fig, target, unet_im, 'U-Net', 4)
+        generate_image(fig, target, pnp_im, 'PnP', 5)
 
+        generate_error_map(fig, target, zfr, 'ZFR', 7)
+        generate_error_map(fig, target, recons, 'CS-TV', 8)
+        generate_error_map(fig, target, unet_im, 'U-Net', 9)
+        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 10)
+        get_colorbar(fig, im, ax)
+
+        generate_error_map(fig, target, zfr, 'ZFR', 12)
+        generate_error_map(fig, target, recons, 'CS-TV', 13)
+        generate_error_map(fig, target, unet_im, 'U-Net', 14)
+        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 15)
         get_colorbar(fig, im, ax)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')

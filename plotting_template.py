@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 # Define number of rows and columns in subplot
-rows = 2
+rows = 3
 cols = 3
 
 def generate_image(fig, max, image, method, image_ind):
@@ -18,23 +18,23 @@ def generate_image(fig, max, image, method, image_ind):
     # Assign x label for plot
     plt.xlabel(f'{method} Reconstruction')
 
-def generate_error_map(fig, max, target, recon, method, image_ind, k=5):
+def generate_error_map(fig, max, target, recon, method, image_ind, relative=False, k=5):
     # Assume rows and cols are available globally
     # rows and cols are both previously defined ints
     ax = fig.add_subplot(rows, cols, image_ind) # Add to subplot
 
     # Normalize error between target and reconstruction
-    error = np.abs(target - recon)
+    error = (target - recon) if relative else np.abs(target - recon)
     normalized_error = error / error.max()
 
-    im = ax.imshow(k * normalized_error, cmap='jet', vmin=0, vmax=1) # Plot image
+    im = ax.imshow(k * normalized_error, cmap='bwr' if relative else 'jet', vmin=0, vmax=1) # Plot image
 
     # Remove axis ticks
     ax.set_xticks([])
     ax.set_yticks([])
 
     # Assign x label for plot
-    plt.xlabel(f'{method} Error')
+    plt.xlabel(f'{method} Relative Error' if relative else f'{method} Absolute Error')
 
     # Return plotted image and its axis in the subplot
     return im, ax
@@ -70,6 +70,10 @@ im, ax = generate_error_map(fig, gt_max, target, general_recon, 'Some Method', 6
 # Generate the colorbar
 get_colorbar(fig, im, ax)
 
+generate_error_map(fig, gt_max, target, zfr_recon, 'ZFR', 8, relative=True)
+im, ax = generate_error_map(fig, gt_max, target, general_recon, 'Some Method', 9, relative=True)
+
+get_colorbar(fig, im, ax)
 # Save the generated figure
 plt.savefig('my/image/path.png')
 
