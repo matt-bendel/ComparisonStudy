@@ -108,7 +108,7 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
             unet_im = transforms.center_crop(unet_im, crop_size)
 
         gt_max = target.max()
-        fig = plt.figure(figsize=(18,6))
+        fig = plt.figure(figsize=(18,9))
         fig.suptitle('T2 Reconstructions')
         generate_image(fig, target, target, 'GT', 1)
         generate_image(fig, target, zfr, 'ZFR', 2)
