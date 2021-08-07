@@ -40,7 +40,7 @@ def load_a(path, num):
                     slice_gt = image[i].numpy() / np.max(image[i].numpy()) * 2
                     data.append(slice_gt)
 
-                    slice_us = tensor_to_complex_np(usamp_image[i]) / tensor_to_complex_np(usamp_image[i]) * 2
+                    slice_us = tensor_to_complex_np(usamp_image[i]) / np.max(image[i].numpy()) * 2
                     usamp_data.append(slice_us)
 
         return np.asarray(data), np.asarray(usamp_data)
