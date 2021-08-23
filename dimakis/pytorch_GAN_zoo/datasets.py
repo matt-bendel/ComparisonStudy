@@ -24,6 +24,10 @@ def saveImage(path, image):
 def prep_mri(inputPath, outputPath):
     in_path = Path(inputPath)
     count = 1
+
+    if not os.path.isdir(outputPath):
+        os.mkdir(outputPath)
+
     for fname in tqdm(list(in_path.glob("*.h5"))):
         with h5py.File(fname, "r") as hf:
             kspace = transforms.to_tensor(hf['kspace'][()])
