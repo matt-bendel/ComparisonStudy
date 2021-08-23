@@ -251,6 +251,7 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
         for j in range(bat_per_epo):
 
             # training the discriminator
+            print_pic = False
             for k in range(n_critic):
                 ix = np.random.randint(0, dataset_real.shape[0], half_batch)
 
@@ -260,7 +261,12 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
                 ix_1 = np.random.randint(0, u_sampled_data.shape[0], half_batch)
                 X_fake = g_par.predict(u_sampled_data[ix_1])
                 y_fake = -np.ones((half_batch, n_patch, n_patch, 1))
-
+                
+                if not print and i % 5 == 0:
+                    plt.figure()
+                    plt.imshow()
+                    plt.savefig()
+                    print_pic = True
                 X, y = np.vstack((X_real, X_fake)), np.vstack((y_real, y_fake))
                 d_loss, accuracy = d_par.train_on_batch(X, y)
 
@@ -268,6 +274,7 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
                     weights = l.get_weights()
                     weights = [np.clip(w, -clip_val, clip_val) for w in weights]
                     l.set_weights(weights)
+
             # training the generator
 
             ix = np.random.randint(0, dataset_real.shape[0], n_batch)
@@ -277,12 +284,13 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
 
             g_loss = gan_model.train_on_batch([X_gen_inp], [y_gan, X_r, X_r])
             f.write('>%d, %d/%d, d=%.3f, acc = %.3f,  w=%.3f,  mae=%.3f,  mssim=%.3f, g=%.3f' % (
-            i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[1], g_loss[2], g_loss[3], g_loss[0]))
+            i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[1], g_loss[2], g_loss[3], g_loss[0])) # NEEDS REVERTED TO i + 1
             f.write('\n')
             print('>%d, %d/%d, d=%.3f, acc = %.3f, g=%.3f' % (i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[0]))
-        filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_%04d.h5' % (i + 1)
-        g_save = g_par.get_layer('model_3')
-        g_save.save_weights(filename)
+        filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_%04d.h5' % (i + 1) # NEEDS REVERTED TO i + 1
+        if i % 5 == 0:
+            g_save = g_par.get_layer('model_3')
+            g_save.save_weights(filename)
     f.close()
 
 
@@ -299,7 +307,6 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 d_model = discriminator(inp_shape=in_shape_dis, trainable=True)
 d_par = multi_gpu_model(d_model, gpus=4, cpu_relocation = True)  # for multi-gpu training
-d_par.summary()
 opt = Adam(lr=0.0002, beta_1=0.5)
 d_par.compile(loss=wloss, optimizer=opt, metrics=[accw])
 

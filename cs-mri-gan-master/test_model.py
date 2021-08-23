@@ -182,16 +182,24 @@ class DataTransform(object):
     def __call__(self, kspace, mask, target, attrs, fname, slice):
         kspace = T.to_tensor(kspace)
         mask = get_gro_mask(kspace.shape)
-        masked_kspace = (kspace * mask + 0.0)
-        # Inverse Fourier Transform to get zero filled solution
-        image = fastmri.ifft2c(masked_kspace)
-        image = fastmri.complex_abs(image)
+        masked_kspace = (kspace * mask) + 0.0
 
         target = fastmri.ifft2c(kspace)
-        target = T.complex_center_crop(target, (320,320))
-        target = fastmri.complex_abs(target)
+        image = fastmri.ifft2c(masked_kspace)
 
-        return (np.expand_dims(np.expand_dims(image.numpy(), axis=-1), axis=0), mask, target.numpy(), fname, slice)
+        target = fastmri.complex_abs(target).numpy() 
+        
+        max_val = np.max(target)
+
+        target = target / max_val * 2
+        image = tensor_to_complex_np(image) / max_val * 2
+
+        image = np.expand_dims(image, axis=-1)
+        usam_real = image.real
+        usam_imag = image.imag
+
+        u_sampled_data_2c = np.concatenate((usam_real, usam_imag), axis=-1)
+        return (u_sampled_data_2c, mask, target, fname, slice)
 
 def save_outputs(outputs, output_path):
     """Saves reconstruction outputs to output_path."""
@@ -214,20 +222,18 @@ def save_outputs(outputs, output_path):
 
 def test_method(idx, gen):
     zfr, mask, target, fname, slice_num = dataset[idx] 
+
     start_time = time.perf_counter()
-
-    prediction = gen4.predict(zfr)
-    prediction = np.squeeze(np.squeeze(prediction, axis=0), axis=-1)
-
-    plt.imshow(np.abs(prediction), cmap='gray')
-    plt.savefig('test_33.png')
+    prediction = gen4.predict(np.expand_dims(zfr, axis=0))
 
     recon_time = time.perf_counter() - start_time
+    psnr, ssim = metrics(np.expand_dims(target,axis=0),prediction[:,:,:,0],2.0)
+    print(f'PSNR: {psnr}, SSIM: {ssim}')
     
     return fname, slice_num, prediction, recon_time
 
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "" #"0,1,2,3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 if __name__ == '__main__':
     data_path = '/storage/fastMRI_brain/data/Matt_preprocessed_data/T2'
@@ -240,15 +246,41 @@ if __name__ == '__main__':
 
     outputs = []
 
-    inp_shape = (320, 320, 1)
+    inp_shape = (320, 320, 2)
     gen4 = generator(inp_shape=inp_shape, trainable=False)
 
-    filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_0033.h5'
+    filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_0303.h5'
     gen4.load_weights(filename)
 
-    #for i in range(len(dataset)):
-    outputs.append(test_method(0, gen4))
-    exit()
-    save_reconstructions(outputs, pathlib.Path('out'))
+    for i in range(len(dataset)):
+        outputs.append(test_method(i, gen4))
 
+    save_outputs(outputs, pathlib.Path('out'))
 
+'''
+data_path = 'testing_gt.pickle'  # Ground truth
+usam_path = 'testing_usamp.pickle'  # Zero-filled reconstructions
+
+df = open(data_path, 'rb')
+uf = open(usam_path, 'rb')
+
+dataset_real = np.asarray(pickle.load(df), dtype='float32')
+print(f'REAL IMAGES: {len(dataset_real)}, SHAPE: {dataset_real[0].shape}')
+
+u_sampled_data = np.expand_dims(pickle.load(uf), axis=-1)
+usam_real = u_sampled_data.real
+usam_imag = u_sampled_data.imag
+
+u_sampled_data_2c = np.concatenate((usam_real, usam_imag), axis=-1)
+print(f'USAMP IMAGES: {len(u_sampled_data_2c)}, SHAPE: {u_sampled_data_2c[0].shape}')
+
+inp_shape = (320, 320, 2)
+gen4 = generator(inp_shape=inp_shape, trainable=False)
+
+filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_0303.h5'
+gen4.load_weights(filename)
+
+preds = gen4.predict(u_sampled_data_2c)
+psnr, ssim = metrics(dataset_real, preds[:,:,:,0], 2.0)
+print(psnr)
+'''

@@ -10,7 +10,7 @@ from pathlib import Path
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 rows = 3
-cols = 5
+cols = 6
 
 def get_psnr(gt, pred):
     maxval = gt.max()
@@ -86,7 +86,9 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
             h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/base_cs/out/{file_name}', 'r') as recons, \
                 h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/zero_filled/out/{file_name}') as zf, \
                     h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/unet/out/{file_name}') as unet_im, \
-                        h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im:
+                        h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/pnp/out/{file_name}') as pnp_im, \
+                            h5py.File(f'/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/out/{file_name}') as gan_im:
+
         ind = transforms.to_tensor(target['kspace'][()]).shape[0] // 2
         need_cropped = False
         crop_size = (320, 320)
@@ -102,12 +104,14 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         recons = recons["reconstruction"][()][ind]
         pnp_im = pnp_im["reconstruction"][()][ind]
         unet_im = unet_im["reconstruction"][()][ind]
+        gan_im = np.squeeze(np.squeeze(gan_im["reconstruction"][()][ind], axis=0), axis=-1) * np.max(target) / 2
 
         if need_cropped:
             zfr = transforms.center_crop(zfr, crop_size)
             recons = transforms.center_crop(recons, crop_size)
             pnp_im = transforms.center_crop(pnp_im, crop_size)
             unet_im = transforms.center_crop(unet_im, crop_size)
+            gan_im = transforms.center_crop(gan_im, crop_size)
 
         gt_max = target.max()
         fig = plt.figure(figsize=(18,9))
@@ -117,17 +121,20 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         generate_image(fig, target, recons, 'CS-TV', 3)
         generate_image(fig, target, unet_im, 'U-Net', 4)
         generate_image(fig, target, pnp_im, 'PnP', 5)
+        generate_image(fig, target, gan_im, 'Recon-Net', 6)
 
-        generate_error_map(fig, target, zfr, 'ZFR', 7)
-        generate_error_map(fig, target, recons, 'CS-TV', 8)
-        generate_error_map(fig, target, unet_im, 'U-Net', 9)
-        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 10)
+        generate_error_map(fig, target, zfr, 'ZFR', 8)
+        generate_error_map(fig, target, recons, 'CS-TV', 9)
+        generate_error_map(fig, target, unet_im, 'U-Net', 10)
+        generate_error_map(fig, target, pnp_im, 'PnP', 11)
+        im, ax = generate_error_map(fig, target, gan_im, 'Recon-Net', 12, k=0.5)
         get_colorbar(fig, im, ax)
 
-        generate_error_map(fig, target, zfr, 'ZFR', 12, relative=True, k=1)
-        generate_error_map(fig, target, recons, 'CS-TV', 13, relative=True, k=1)
-        generate_error_map(fig, target, unet_im, 'U-Net', 14, relative=True, k=1)
-        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 15, relative=True, k=1)
+        generate_error_map(fig, target, zfr, 'ZFR', 14, relative=True, k=1)
+        generate_error_map(fig, target, recons, 'CS-TV', 15, relative=True, k=1)
+        generate_error_map(fig, target, unet_im, 'U-Net', 16, relative=True, k=1)
+        generate_error_map(fig, target, pnp_im, 'PnP', 17, relative=True, k=1)
+        im, ax = generate_error_map(fig, target, gan_im, 'Recon-Net', 18, relative=True, k=0.5)
         get_colorbar(fig, im, ax)
 
         plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')

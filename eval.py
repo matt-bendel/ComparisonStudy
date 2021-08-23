@@ -120,7 +120,7 @@ def evaluate(args, recons_key):
             target = transforms.to_tensor(target['kspace'][()])
             target = fastmri.ifft2c(target)
             target = fastmri.complex_abs(target).numpy()
-            recons = recons["reconstruction"][()]
+            recons = np.squeeze(np.squeeze(recons["reconstruction"][()],axis=-1),axis=1) * np.max(target) / 2#recons["reconstruction"][()]
             for i in range(target.shape[0]):
                 metrics.push(target[i], recons[i])
 
@@ -206,5 +206,5 @@ if __name__ == "__main__":
     print(metrics)
     get_avg_slice_time(args)
     #save_histogram('PSNR', all_psnr, args.method)
-    #save_histogram('SNR', all_snr, args.method)
-    save_histogram('SSIM', all_ssim, args.method)
+    save_histogram('SNR', all_snr, args.method)
+    #save_histogram('SSIM', all_ssim, args.method)

@@ -44,12 +44,9 @@ def load_a(path, num):
                     usamp_data.append(slice_us)
 
         return np.asarray(data), np.asarray(usamp_data)
-
+'''
 data = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_train')
 train_gt, train_us = load_a(data,0)
-
-#data = Path('/storage/fastMRI_brain/data/multicoil_val')
-#train_gt_2, train_us_2 = load_a(data,0)
 
 print(f"TOTAL NUMBER OF TRAINING IMAGES: {train_gt.shape[0]}")
 
@@ -58,10 +55,9 @@ with open(os.path.join(save_path,'training_gt.pickle'),'wb') as f:
 
 with open(os.path.join(save_path,'training_usamp.pickle'),'wb') as f:
     pickle.dump(train_us,f,protocol=4)
-
 '''
-#for testing data
 
+#for testing data
 test_path = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
 test_gt, test_us = load_a(test_path, 0)
 
@@ -70,4 +66,4 @@ with open(os.path.join(save_path,'testing_gt.pickle'),'wb') as f:
 
 with open(os.path.join(save_path, 'testing_usamp.pickle'), 'wb') as f:
     pickle.dump(test_us, f, protocol=4)
-'''
+
