@@ -49,6 +49,7 @@ def generate_error_map(fig, target, recon, method, image_ind, relative=False, k=
     #normalized_error = error / error.max() if not relative else error
     if relative:
         im = ax.imshow(k * error, cmap='bwr', origin='lower', vmin=-0.0001, vmax=0.0001) # Plot image
+        plt.gca().invert_yaxis()
     else:
         im = ax.imshow(k * error, cmap='jet') # Plot image
 
