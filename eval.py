@@ -15,6 +15,7 @@ import pickle
 all_psnr = []
 all_ssim = []
 all_snr = []
+all_ratio = []
 
 def mse(gt: np.ndarray, pred: np.ndarray) -> np.ndarray:
     """Compute Mean Squared Error (MSE)"""
@@ -123,6 +124,7 @@ def evaluate(args, recons_key):
             recons = np.squeeze(np.squeeze(recons["reconstruction"][()],axis=-1),axis=1) * np.max(target) / 2#recons["reconstruction"][()]
             for i in range(target.shape[0]):
                 metrics.push(target[i], recons[i])
+                all_ratio.append(recons / np.linalg.norm(target[i],2))
 
     return metrics
 
@@ -206,5 +208,6 @@ if __name__ == "__main__":
     print(metrics)
     get_avg_slice_time(args)
     #save_histogram('PSNR', all_psnr, args.method)
-    save_histogram('SNR', all_snr, args.method)
+    #save_histogram('SNR', all_snr, args.method)
+    save_histogram('Ratio', all_ratio, args.method)
     #save_histogram('SSIM', all_ssim, args.method)
