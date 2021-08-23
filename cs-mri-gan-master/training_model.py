@@ -284,10 +284,10 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
 
             g_loss = gan_model.train_on_batch([X_gen_inp], [y_gan, X_r, X_r])
             f.write('>%d, %d/%d, d=%.3f, acc = %.3f,  w=%.3f,  mae=%.3f,  mssim=%.3f, g=%.3f' % (
-            i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[1], g_loss[2], g_loss[3], g_loss[0])) # NEEDS REVERTED TO i + 1
+            i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[1], g_loss[2], g_loss[3], g_loss[0]))
             f.write('\n')
             print('>%d, %d/%d, d=%.3f, acc = %.3f, g=%.3f' % (i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[0]))
-        filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_%04d.h5' % (i + 1) # NEEDS REVERTED TO i + 1
+        filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_%04d.h5' % (i + 1)
         if i % 5 == 0:
             g_save = g_par.get_layer('model_3')
             g_save.save_weights(filename)
@@ -315,7 +315,6 @@ g_par = multi_gpu_model(g_model, gpus=4, cpu_relocation = True)  # for multi-gpu
 g_par.summary()
 
 gan_model = define_gan_model(g_par, d_par, in_shape_gen)
-#gan_model = multi_gpu_model(gan_model, gpus=4, cpu_relocation = True)
 opt1 = Adam(lr=0.0001, beta_1=0.5)
 gan_model.compile(loss=[wloss, 'mae', mssim], optimizer=opt1,
                   loss_weights=[0.01, 20.0, 1.0])  # loss weights for generator training

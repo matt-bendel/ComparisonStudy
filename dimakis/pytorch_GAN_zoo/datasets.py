@@ -18,80 +18,18 @@ def saveImage(path, image):
 
 
 def prep_mri(inputPath, outputPath):
+    in_path = Path(inputPath)
+    count = 1
+    for fname in tqdm(list(in_path.glob("*.h5"))):
+        with h5py.File(fname, "r") as hf:
+            kspace = transforms.to_tensor(hf['kspace'][()])
+            image = fastmri.ifft2c(kspace)
+            image = fastmri.complex_abs(image).numpy()
 
-
-def celebaSetup(inputPath,
-                outputPath,
-                pathConfig="config_celeba_cropped.json"):
-
-    imgList = [f for f in os.listdir(
-        inputPath) if os.path.splitext(f)[1] == ".jpg"]
-    cx = 89
-    cy = 121
-
-    nImgs = len(imgList)
-
-    if not os.path.isdir(outputPath):
-        os.mkdir(outputPath)
-
-    for index, item in enumerate(imgList):
-        printProgressBar(index, nImgs)
-        path = os.path.join(inputPath, item)
-        img = np.array(pil_loader(path))
-
-        img = img[cy - 64: cy + 64, cx - 64: cx + 64]
-
-        path = os.path.join(outputPath, item)
-        saveImage(path, img)
-
-    printProgressBar(nImgs, nImgs)
-
-
-def resizeDataset(inputPath, outputPath, maxSize):
-
-    sizes = [64, 128, 512, 1024]
-    scales = [0, 5, 6, 8]
-    index = 0
-
-    imgList = [f for f in os.listdir(inputPath) if os.path.splitext(f)[
-        1] in [".jpg", ".npy"]]
-
-    nImgs = len(imgList)
-
-    if maxSize < sizes[0]:
-        raise AttributeError("Maximum resolution too low")
-
-    if not os.path.isdir(outputPath):
-        os.mkdir(outputPath)
-
-    datasetProfile = {}
-
-    for index, size in enumerate(sizes):
-
-        if size > maxSize:
-            break
-
-        localPath = os.path.join(outputPath, str(size))
-        if not os.path.isdir(localPath):
-            os.mkdir(localPath)
-
-        datasetProfile[str(scales[index])] = localPath
-
-        print("Resolution %d x %d" % (size, size))
-
-        resizeModule = NumpyResize((size, size))
-
-        for index, item in enumerate(imgList):
-            printProgressBar(index, nImgs)
-            path = os.path.join(inputPath, item)
-            img = pil_loader(path)
-
-            img = resizeModule(img)
-            path = os.path.splitext(os.path.join(localPath, item))[0] + ".jpg"
-            saveImage(path, img)
-        printProgressBar(nImgs, nImgs)
-
-    return datasetProfile, localPath
+            for i in range(image.shape[0]):
+                path = os.path.join(outputPath, f'mri_{count}.jpg')
+                count = count + 1
+                saveImage(path, image[i])
 
 
 if __name__ == "__main__":

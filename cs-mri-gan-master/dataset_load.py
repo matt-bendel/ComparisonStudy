@@ -37,14 +37,14 @@ def load_a(path, num):
                 image = fastmri.complex_abs(image)
 
                 for i in range(image.shape[0]):
-                    slice_gt = image[i].numpy() / np.max(image[i].numpy()) * 2
+                    slice_gt = image[i].numpy() / np.max(image[i].numpy()) * 2 - 1
                     data.append(slice_gt)
 
-                    slice_us = tensor_to_complex_np(usamp_image[i]) / np.max(image[i].numpy()) * 2
+                    slice_us = tensor_to_complex_np(usamp_image[i]) / np.max(image[i].numpy()) * 2 - 1
                     usamp_data.append(slice_us)
 
         return np.asarray(data), np.asarray(usamp_data)
-'''
+
 data = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_train')
 train_gt, train_us = load_a(data,0)
 
@@ -55,8 +55,8 @@ with open(os.path.join(save_path,'training_gt.pickle'),'wb') as f:
 
 with open(os.path.join(save_path,'training_usamp.pickle'),'wb') as f:
     pickle.dump(train_us,f,protocol=4)
-'''
 
+'''
 #for testing data
 test_path = Path('/storage/fastMRI_brain/data/Matt_preprocessed_data/T2/singlecoil_test')
 test_gt, test_us = load_a(test_path, 0)
@@ -66,4 +66,4 @@ with open(os.path.join(save_path,'testing_gt.pickle'),'wb') as f:
 
 with open(os.path.join(save_path, 'testing_usamp.pickle'), 'wb') as f:
     pickle.dump(test_us, f, protocol=4)
-
+'''
