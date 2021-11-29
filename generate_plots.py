@@ -115,8 +115,8 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
             gan_im = transforms.center_crop(gan_im, crop_size)
 
         gt_max = target.max()
-        fig = plt.figure(figsize=(18,9))
-        fig.suptitle('T2 Reconstructions')
+        fig = plt.figure()
+        # fig.suptitle('T2 Reconstructions')
         generate_image(fig, target, target, 'GT', 1)
         # generate_image(fig, target, zfr, 'ZFR', 2)
         generate_image(fig, target, recons, 'CS', 2)
@@ -138,5 +138,5 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         # im, ax = generate_error_map(fig, target, gan_im, 'Recon-Net', 18, relative=True, k=1)
         # get_colorbar(fig, im, ax)
 
-        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/ece_proj.png')
+        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/ece_proj_{count}.png')
 
