@@ -128,7 +128,7 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         # generate_error_map(fig, target, recons, 'CS-TV', 9)
         # generate_error_map(fig, target, unet_im, 'U-Net', 10)
         # generate_error_map(fig, target, pnp_im, 'PnP', 11)
-        im, ax = generate_error_map(fig, target, pnp_im, 'CS', 4)
+        im, ax = generate_error_map(fig, target, pnp_im, 'PnP', 4)
         get_colorbar(fig, im, ax)
 
         # generate_error_map(fig, target, zfr, 'ZFR', 14, relative=True, k=1)
