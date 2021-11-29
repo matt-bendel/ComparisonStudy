@@ -1,18 +1,19 @@
-import tensorflow as tf
-from keras.utils import multi_gpu_model
-import numpy as np
+import os
 import pickle
+import numpy as np
+import tensorflow as tf
+import matplotlib.pyplot as plt
+
+from keras import backend as K
+
+from keras.utils import multi_gpu_model
 from keras.models import Model, Input
-from keras.optimizers import Adam, RMSprop
-from keras.layers import Dense
+from keras.optimizers import Adam
 from keras.layers import Conv2D, Conv2DTranspose
-from keras.layers import Flatten, Add
+from keras.layers import Add
 from keras.layers import Concatenate, Activation
 from keras.layers import LeakyReLU, BatchNormalization, Lambda
-from keras import backend as K
-import os
-from skimage.metrics import peak_signal_noise_ratio,structural_similarity
-import matplotlib.pyplot as plt
+
 
 def accw(y_true, y_pred):
     y_pred = K.clip(y_pred, -1, 1)
@@ -23,8 +24,6 @@ def mssim(y_true, y_pred):
     costs = 1.0 - tf.reduce_mean(tf.image.ssim(y_true, y_pred, 2.0))
     return costs
 
-def psnr(y_true, y_pred):
-    return peak_signal_noise_ratio(y_true, y_pred, data_range=y_true.max())
 
 def wloss(y_true, y_predict):
     return -K.mean(y_true * y_predict)
@@ -33,7 +32,7 @@ def wloss(y_true, y_predict):
 def discriminator(inp_shape=(320, 320, 1), trainable=True):
     gamma_init = tf.random_normal_initializer(1., 0.02)
 
-    inp = Input(shape=(320,320,1))
+    inp = Input(shape=(320, 320, 1))
 
     l0 = Conv2D(64, (4, 4), strides=(2, 2), padding='same', use_bias=True, kernel_initializer='he_normal',
                 bias_initializer='zeros')(inp)  # b_init is set to none, maybe they are not using bias here, but I am.
@@ -251,7 +250,6 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
         for j in range(bat_per_epo):
 
             # training the discriminator
-            print_pic = False
             for k in range(n_critic):
                 ix = np.random.randint(0, dataset_real.shape[0], half_batch)
 
@@ -261,12 +259,7 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
                 ix_1 = np.random.randint(0, u_sampled_data.shape[0], half_batch)
                 X_fake = g_par.predict(u_sampled_data[ix_1])
                 y_fake = -np.ones((half_batch, n_patch, n_patch, 1))
-                
-                if not print and i % 5 == 0:
-                    plt.figure()
-                    plt.imshow()
-                    plt.savefig()
-                    print_pic = True
+
                 X, y = np.vstack((X_real, X_fake)), np.vstack((y_real, y_fake))
                 d_loss, accuracy = d_par.train_on_batch(X, y)
 
@@ -276,7 +269,6 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
                     l.set_weights(weights)
 
             # training the generator
-
             ix = np.random.randint(0, dataset_real.shape[0], n_batch)
             X_r = dataset_real[ix]
             X_gen_inp = u_sampled_data[ix]
@@ -284,7 +276,7 @@ def train(g_par, d_par, gan_model, dataset_real, u_sampled_data, n_epochs, n_bat
 
             g_loss = gan_model.train_on_batch([X_gen_inp], [y_gan, X_r, X_r])
             f.write('>%d, %d/%d, d=%.3f, acc = %.3f,  w=%.3f,  mae=%.3f,  mssim=%.3f, g=%.3f' % (
-            i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[1], g_loss[2], g_loss[3], g_loss[0]))
+                i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[1], g_loss[2], g_loss[3], g_loss[0]))
             f.write('\n')
             print('>%d, %d/%d, d=%.3f, acc = %.3f, g=%.3f' % (i + 1, j + 1, bat_per_epo, d_loss, accuracy, g_loss[0]))
         filename = '/home/bendel.8/Git_Repos/ComparisonStudy/cs-mri-gan-master/gen_weights_a5_%04d.h5' % (i + 1)
@@ -306,12 +298,13 @@ accel = 3
 os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3"
 
 d_model = discriminator(inp_shape=in_shape_dis, trainable=True)
-d_par = multi_gpu_model(d_model, gpus=4, cpu_relocation = True)  # for multi-gpu training
+d_model.summary()
+d_par = multi_gpu_model(d_model, gpus=4, cpu_relocation=True)  # for multi-gpu training
 opt = Adam(lr=0.0002, beta_1=0.5)
 d_par.compile(loss=wloss, optimizer=opt, metrics=[accw])
 
 g_model = generator(inp_shape=in_shape_gen, trainable=True)
-g_par = multi_gpu_model(g_model, gpus=4, cpu_relocation = True)  # for multi-gpu training
+g_par = multi_gpu_model(g_model, gpus=4, cpu_relocation=True)  # for multi-gpu training
 g_par.summary()
 
 gan_model = define_gan_model(g_par, d_par, in_shape_gen)
@@ -327,17 +320,12 @@ df = open(data_path, 'rb')
 uf = open(usam_path, 'rb')
 
 dataset_real = np.expand_dims(pickle.load(df), axis=-1)
-#plt.imshow(dataset_real[0, :, :, 0], cmap='gray')
-#plt.savefig('random_im.png')
-print(f'REAL IMAGES: {len(dataset_real)}, SHAPE: {dataset_real[0].shape}')
 u_sampled_data = np.expand_dims(pickle.load(uf), axis=-1)
+
 usam_real = u_sampled_data.real
 usam_imag = u_sampled_data.imag
 
 u_sampled_data_2c = np.concatenate((usam_real, usam_imag), axis=-1)
-#plt.imshow(u_sampled_data_2c[0, :, :, 0], cmap='gray')
-#plt.savefig('random_im_us.png')
-print(f'USAMP IMAGES: {len(u_sampled_data_2c)}, SHAPE: {u_sampled_data_2c[0].shape}')
 
 f = open('log_a5.txt', 'x')
 f = open('log_a5.txt', 'a')

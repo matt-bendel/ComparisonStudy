@@ -9,8 +9,8 @@ from tqdm import tqdm
 from pathlib import Path
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
-rows = 3
-cols = 6
+rows = 2
+cols = 2
 
 def get_psnr(gt, pred):
     maxval = gt.max()
@@ -33,7 +33,7 @@ def generate_image(fig, target, image, method, image_ind):
         psnr = get_psnr(target, image)
         snr = get_snr(target, image)
         ssim = get_ssim(target, image)
-        ax.set_title(f'PSNR: {psnr:.2f}, SNR: {snr:.2f}\nSSIM: {ssim:.4f}')
+        ax.set_title(f'PSNR: {psnr:.2f}')
     ax.imshow(np.abs(image), cmap='gray', vmin=0, vmax=np.max(target))
     ax.set_xticks([])
     ax.set_yticks([])
@@ -118,25 +118,25 @@ for fname in tqdm(list(data_dir.glob("*.h5"))):
         fig = plt.figure(figsize=(18,9))
         fig.suptitle('T2 Reconstructions')
         generate_image(fig, target, target, 'GT', 1)
-        generate_image(fig, target, zfr, 'ZFR', 2)
-        generate_image(fig, target, recons, 'CS-TV', 3)
-        generate_image(fig, target, unet_im, 'U-Net', 4)
-        generate_image(fig, target, pnp_im, 'PnP', 5)
-        generate_image(fig, target, gan_im, 'Recon-Net', 6)
+        # generate_image(fig, target, zfr, 'ZFR', 2)
+        generate_image(fig, target, recons, 'CS', 2)
+        # generate_image(fig, target, unet_im, 'U-Net', 4)
+        # generate_image(fig, target, pnp_im, 'PnP', 5)
+        # generate_image(fig, target, gan_im, 'Recon-Net', 6)
 
-        generate_error_map(fig, target, zfr, 'ZFR', 8)
-        generate_error_map(fig, target, recons, 'CS-TV', 9)
-        generate_error_map(fig, target, unet_im, 'U-Net', 10)
-        generate_error_map(fig, target, pnp_im, 'PnP', 11)
-        im, ax = generate_error_map(fig, target, gan_im, 'Recon-Net', 12)
+        # generate_error_map(fig, target, zfr, 'ZFR', 8)
+        # generate_error_map(fig, target, recons, 'CS-TV', 9)
+        # generate_error_map(fig, target, unet_im, 'U-Net', 10)
+        # generate_error_map(fig, target, pnp_im, 'PnP', 11)
+        im, ax = generate_error_map(fig, target, recons, 'CS', 4)
         get_colorbar(fig, im, ax)
 
-        generate_error_map(fig, target, zfr, 'ZFR', 14, relative=True, k=1)
-        generate_error_map(fig, target, recons, 'CS-TV', 15, relative=True, k=1)
-        generate_error_map(fig, target, unet_im, 'U-Net', 16, relative=True, k=1)
-        generate_error_map(fig, target, pnp_im, 'PnP', 17, relative=True, k=1)
-        im, ax = generate_error_map(fig, target, gan_im, 'Recon-Net', 18, relative=True, k=1)
-        get_colorbar(fig, im, ax)
+        # generate_error_map(fig, target, zfr, 'ZFR', 14, relative=True, k=1)
+        # generate_error_map(fig, target, recons, 'CS-TV', 15, relative=True, k=1)
+        # generate_error_map(fig, target, unet_im, 'U-Net', 16, relative=True, k=1)
+        # generate_error_map(fig, target, pnp_im, 'PnP', 17, relative=True, k=1)
+        # im, ax = generate_error_map(fig, target, gan_im, 'Recon-Net', 18, relative=True, k=1)
+        # get_colorbar(fig, im, ax)
 
-        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/recons_{count}.png')
+        plt.savefig(f'/home/bendel.8/Git_Repos/ComparisonStudy/plots/images/ece_proj.png')
 
